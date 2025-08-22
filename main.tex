@@ -34,7 +34,6 @@
 % with minimal changes by explicit permission from AAAI.
 %
 \title{Enhancing Linux Kernel Real-Time Performance through Centralized Timer Interrupt Handling}
-% \author{Anonymous}
 \author{
 \begin{tabular}{lllll}
   Zhouyi Zhou & Zhili Liu & Shancong Zhang & Jiemin Li & Dengke Du \\
@@ -42,133 +41,86 @@
 %  & Dengke Du & Mengke Sun  & Zhiqiang Wang & Hongyan Liu & Guoxin Xu & Yexin Han\\
 \end{tabular}
 \\
-Department of Computer Science, University of Central Florida, Orlando, FL USA\\
-\{syed.hammad.ahmed, muhammad.junaid.khan, gita.sukthankar\}@ucf.edu\\ 
+Beijing UCAS Space Technology Co Ltd, Beijing, China\\
+\{zhouyi.zhou, zhili.liu, sam.zhang, jiemin.li,
+dengke.du, mengke.sun, zhiqiangwang, hongyan.liu,
+xuguokai, hanyexin\}@ucas.com.cn\\ 
 }
-%\author{Syed Hammad Ahmed\\
-%Dept. of Computer Science\\
-%University of Central Florida\\
-%Orlando, USA\\
-%syed.hammad.ahmed@ucf.edu
-%\And 
-%Muhammad Junaid Khan\\
-%Dept. of Computer Science\\
-%University of Central Florida\\
-%Orlando, USA\\
-%muhammad.junaid.khan@ucf.edu\\
-%\And 
-%Gita Sukthankar\\
-%Dept. of Computer Science\\
-%University of Central Florida\\
-%Orlando, USA\\
-%gitars@eecs.ucf.edu
-%}
 
 \maketitle
 
 \begin{abstract}
-Due to the rise in video content creation targeted towards children, there is a need for robust content moderation schemes for video hosting platforms. A video that is visually benign may include audio content that is inappropriate for young children while being impossible to detect with a unimodal content moderation system. Popular video hosting platforms for children such as YouTube Kids still publish videos which contain audio content that is not conducive to a child's healthy behavioral and physical development. A robust classification of malicious videos requires audio representations in addition to video features. However, recent content moderation approaches rarely employ multimodal architectures that explicitly consider non-speech audio cues. To address this, we present an efficient adaptation of CLIP (Contrastive Language–Image Pre-training) that can leverage contextual audio cues for enhanced content moderation. We incorporate 1) the audio modality and 2) prompt learning, while keeping the backbone modules of each modality frozen. We conduct our experiments on a multimodal version of the MOB (Malicious or Benign) dataset in supervised and few-shot settings. %Our code and dataset will be made publicly available.
- 
+In real-time and high-performance computing environments, predictable CPU behavior and low-
+latency response are critical. The Linux kernel, by default, distributes periodic timer interrupts
+(ticks) across all CPU cores, issues inter-processor interrupts (IPIs) and scheduling disturbances
+that hinder deterministic performance. This paper investigates a method for improving Linux
+kernel real-time behavior by centralizing timer interrupt handling and inter-processor interrupts
+on periodically invoked function. We analyze the mechanism in detail, explain the interplay with
+RCU context-tracking, and demonstrate the practical benefits both in a GPIO toggling environment
+and a inter-processor communication environment. Our experiments show significant
+improvements in interrupt latency and scheduling predictability, enabling more efficient real-time
+and user-space networking applications. 
 \end{abstract}
 
 
 \section{Introduction}
-
-There has been a remarkable surge in both the creation and consumption of video content on the internet, making automated content moderation indispensable for video sharing platforms. More than 80\% of the internet usage globally is from video data streaming and downloading \cite{Shewale_2024a}.  In many countries, content moderation is mandatory for video hosting platforms to remain compliant with legal regulations. 
-Recent findings indicate that around 2,500 videos are published per minute on YouTube, which is the largest video sharing platform \cite{ytusagedaily}.  Unfortunately, there is a significant amount of content which can be detrimental to emotional and psychological well-being of the viewer. 
- Extensive consumption of malicious video content has socio-economic impacts in addition to its effects on individual viewers. 
-%Furthermore, content moderation is mandatory for video hosting platforms as a requirement of compliance to legal regulations. 
-
-Lawsuits have been filed against various online content sharing platforms for intentionally fostering addiction among children through their content, thereby exacerbating the mental health crisis among the youth \cite{lawsuit}. Video sharing websites combine both manual and automated content moderation approaches to eliminate the presence of published malicious content \cite{YouTubeContentMod,TikTokContentMod}. For this paper, we sampled the content currently available for pre-schoolers on YouTube Kids and identified a number of malicious videos that haven't been flagged by the existing content moderation system. Figures \ref{fig:ytkmachinegun} and \ref{fig:ytkpiano} show snapshots from two different problematic videos which include violence and disturbing music, respectively.   These examples highlight the need to develop robust and efficient tools for video content moderation.
-
-Young children, particularly toddlers and pre-schoolers, are the demographic most susceptible to being adversely affected by video content created with malicious intent. Firstly, they are too naive to appreciate that certain audio-visual features are deliberately incorporated in videos in order to lure them to continue watching. Furthermore, continuous adult supervision is not pragmatic - in fact child's screen time serves as a babysitting tool, enabling parents to attend to other responsibilities or take a break, as reported by 32\% of parents \cite{babysitting_tool}. Numerous psychological studies discuss the adverse effects of exposure of inappropriate video content on a young child's mental and behavioral health.
-
-%Disturbing audiovisual cues need to be comprehensively enumerated with strong evidences from legitimate psychological research.
-\citeauthor{ahmed2023flairs} (\citeyear{ahmed2023flairs}) provide a catalog of features that characterize malicious video content including quick and repetitive movements, frightening or repulsive appearance, harmful or destructive actions, and inappropriate or indecent behavior. They also note that malicious audio may include high-volume music or noise, cries or shouts, sounds of explosions or gunshots, and the use of offensive language. Excessive exposure to these inappropriate videos poses a notable threat to the cognitive growth of preschoolers. 
-
-% revisit if time and include uni-modal
-Recent works on content moderation for children's videos have attempted to address the problem with multimodal approaches. \citeauthor{chuttur} (\citeyear{chuttur}) analyze text in the form of user comments and captions, along with image data. Their method is unable to capture the spatio-temporal context in videos as they use single images as inputs. \citeauthor{samba} (\citeyear{samba}) proposed a multimodal solution that incorporates subtitles and video metadata as input. As the subtitles do not contain information about music or sound effects, Samba may classify a video with malicious audio content as safe. \citeauthor{Papadamou} (\citeyear{Papadamou}) rely on video meta-data such as tags, title, statistics, in addition to video thumbnails. None of these models include audio inputs which is an essential modality for devising a robust video content moderation system. \citeauthor{tahir_audio} 
- (\citeyear{tahir_audio}) and \citeauthor{algh_audio} (\citeyear{algh_audio}) combined audio spectrograms with video features to classify the video content being either appropriate or inappropriate. However, the former focuses on detecting fake cartoon videos, whereas the latter only introduces a high-level idea without implementation.  %None of these works have published a dataset which includes annotations of malicious audiovisual features. 
-
-Our proposed work bridges the gap in previous works by adapting OpenAI's CLIP architecture \cite{vanilla_clip} for videos, and enabling it to learn prompts for both the vision and text branches. Furthermore, we incorporate a pre-trained audio encoder from AudioCLIP \cite{audio_clip} to handle the audio modality while adding a fully-trainable projection layer to improve performance on the downstream task of detecting malicious videos. We also introduce a multimodal dataset with both audio and video modalities that includes annotations specifically targeted for the problem of content moderation for children's videos.
-
-Psychological research indicates that prolonged exposure to animated content featuring rapid movements can result in deterioration in performing everyday tasks \cite{fast_motion_psycho}. Likewise, the impact of loud noises on a child's brain development, particularly affecting reading, writing, and comprehension skills, has been established \cite{loud_noise_psycho}. The direct influence of violent cartoons on the behavior of preschoolers is evident, leading to increased levels of aggression and anxiety \cite{violent_cartoons_psycho}. Based on these psychological studies, in this paper we identify subtly harmful acoustic and visual features which makes the content alluring and addictive to a young child. These include a) brightly-hued fast moving objects with fast and loud music and b) split-screen animations with fast and loud music. A sample video snapshot for a) is shown in Figure \ref{fig:ytkpiano}.
-% , and Figure \ref{fig:image_a} and \ref{fig:image_b}, respectively. 
-
-This paper makes the following contributions towards the problem of content moderation of children's videos:
-\begin{compactenum}
-    \item Introduces a multimodal framework that includes the audio modality for more robust content moderation of children's cartoon videos. We perform ablations to demonstrate the enhanced performance of adding audio.
-    
-    \item Adapts CLIP to enable learning of prompts in both vision and text branches across multiple layers of encoders, along with AudioCLIP's pre-trained audio encoder.  We integrate a learnable projection layer in order to efficiently learn audio representations for the downstream content moderation task, while keeping the weights in the core models frozen.
-    
-    \item Presents a comprehensive multimodal dataset MMOB (\textbf{M}ultimodal \textbf{M}alicious \textbf{o}r \textbf{B}enign) which includes labeled cartoon video samples with annotations of vision and audio labels. Baseline results for MMOB in supervised and few-shot learning settings are also showcased. We have released the dataset to encourage further research in the area.
-  %  \item Identifies additional malicious audio-visual features while providing related psychological studies that assert that their exposure to children is unhealthy for their development.
-\end{compactenum}
+Modern high-performance and real-time systems increasingly demand predictable CPU behavior,
+low interrupt latency, and minimal system noise. However, general-purpose operating systems
+like Linux are not originally designed with these strict requirements in mind. In particular, two key
+sources of execution disturbance are periodic timer interrupts and inter-processor interrupts (IPIs)
+— each of which independently contributes to unpredictability and jitter in CPU-bound workloads.
+Timer Interrupts: The Linux kernel schedules periodic timer interrupts (commonly known as ticks)
+on every CPU core to maintain kernel housekeeping, timekeeping, and scheduling. These
+interrupts invoke routines for updating system time, triggering task rescheduling, handling timer
+expiration, real time process bandwidth control, and advancing internal kernel mechanisms. For
+typical workloads, such periodic processing is harmless or even necessary. However, for latency-
+sensitive applications — such as user-space network packet processing, real-time control loops,
+or audio/video pipelines — these timer interrupts pose significant interference by breaking
+deterministic CPU execution.
 
 
-\begin{figure}[htp]
-    \centering
-    \includegraphics[width=0.85\columnwidth]{figures/violent.png}
-    \caption{One of the malicious video examples currently available on the YouTube Kids platform that shows a furious cartoon character shooting at other cartoon characters with a machine gun.}
-    \label{fig:ytkmachinegun}
-\end{figure}
-
-\begin{figure}[htp]
-    \centering
-    \includegraphics[width=0.85\columnwidth]{figures/malicious_audio.png}
-    \caption{A sample video which includes fast and loud piano notes. Usually in such videos, there is high tempo, a lack of rhythm and varying pitches. The video also includes bright and striking hues, and suggests the violent action of ``hitting the piano with a bat''.}
-    \label{fig:ytkpiano}
-\end{figure}
-
-
-\section{Background}\label{BG} 
-\subsection{COPPA - Children's Online Privacy Protection Act} 
-The Children's Online Privacy Protection Act (COPPA) \cite{COPPA1998}, enforced by the US Federal Trade Commission (FTC), establishes clear privacy and content guidelines for online content publishers targeting children aged 13 or younger. In 2019, additional provisions were incorporated into COPPA, particularly addressing YouTube, to guarantee the delivery of safe content for children. In January 2024, the Federal Trade Commission (FTC) released a proposal revising the regulations that enforce the Children's Online Privacy Protection Act (COPPA Rule). The proposed modifications aim to adapt to technological changes, and strengthen protections for children's personal information based on the FTC's review of public comments and enforcement experience \cite{FTC_2024}. Therefore, the problem of publishing age-appropriate content that we address in this paper, has been given high importance by FTC, which recommends avoiding content that could be harmful or inappropriate for children. 
-
-\subsection{CLIP - Contrastive Language-Image Pre-Training}
-CLIP \cite{vanilla_clip} is a very large multimodal model trained on a huge corpus of (image, text) pairs. Paired images and text are used for training both image and text encoders, jointly.  The user provides the CLIP model with the text prompt that will elicit the best image classification; this text may include ground truth class information. While learning the combined multimodal embedding space the model aims to maximize the cosine similarity scores of the image with the ground truth text while minimizing the cosine similarity between the embeddings of incorrect pairings. CLIP is capable of performing zero-shot classification and other downstream computer vision tasks efficiently using natural language supervision. In this work we modify CLIP for video input, and augment it to learn prompts in both the visual and textual branches of CLIP.
-
-\begin{figure*}[htp]
-    \centering
-    \includegraphics[width=0.95\textwidth]{figures/fig1-MMOB.png}
-    \caption{Our proposed architecture incorporates the audio modality by adding a pre-trained audio encoder. The inputs of the audio encoder are spectrograms which are visual representations of audio frequency signals. The trainable projection layer learns audio representations for the downstream content moderation task. Temporal pooling outputs a combined representation of \textit{T} input video frames, hence adapting Vanilla CLIP for video. These audio and visual representations are fused together within the Feature Fusion block. Vanilla CLIP's text and vision branches are adapted to include learnable prompts (tokens) through all layers. We keep all encoder layers of text, vision, and audio branches frozen. The input from the text branch is the class name, e.g. ``malicious'' as shown in the figure.}  
-    \label{fig:model}
-\end{figure*}
+While mechanisms like NOHZ\_FULL aim to reduce the frequency of such timer ticks, they cannot
+completely eliminate them. Even in nohz\_full mode, the tick timer still fire periodically. Thus, strict
+real-time applications still face residual interruptions even on nominally “isolated” cores.
+Inter-Processor Interrupts (IPIs): In parallel with timer-related disturbances, IPIs represent another
+major source of noise. IPIs are used in the kernel to coordinate state changes between cores —
+for example, to trigger TLB shootdowns, wake remote tasks, or synchronize RCU grace periods.
+From the perspective of an application pinned to a specific core, IPIs are unpredictable and
+asynchronous, and can cause unwelcome preemption or context switches.
+Although disabling timer interrupts may reduce local noise, it does not automatically prevent a
+core from receiving IPIs initiated by other cores or subsystems. This means that even a core
+exempt from ticks may still be interrupted arbitrarily due to kernel-wide coordination
+mechanisms.
 
 
-\section{Related Work}\label{RW}
-% - CLIP and its variants\\
-%     - ViFi\\
-%     - ...\\
-% - Prompt Learning in VL model\\
-% Maple\\
-% vita\\
-% vifi\\
-
-% - Content Moderation of videos for kids\\
-%     - Samba and others... (see latest let rev paper)\\
-%     - unimodal vs multimodal\\
-%     - multimodal without audio vs with audio\\
-%     - datasets of multimodal published?\\ <<<IMP>>>
-%Researchers working in the area of children's content moderation have proposed various approaches including single modality mainly using video content with motion related vectors \cite{vid1}, multimodal i.e., utilizing both video and text content such as user comments \cite{user_comm1} and \cite{user_comm2}, even subtitles with metadata \cite{samba} and even video with onscreen ads while viewing a particular video \cite{vid_ads} but not many have focused on audio features together with video except \cite{tahir_audio} and \cite{algh_audio} who used audio spectrograms with video features to classify the video content being either appropriate or inappropriate. Similarly, \cite{ahmed2023icmla} have adapted Vision-Language models for the content moderation problem and provide state-of-the-art results on the MOB dataset \cite{ahmed2023flairs}.
-
-\subsection{Audio Modality}
-Audio is an oft neglected modality; however we believe that raw audio provides valuable contextual clues that are not included in the text transcription.  This is particularly true in children’s cartoons where sound effects are often used in lieu of words to convey meaning to young children with smaller vocabularies.  Popular cartoon sound effects include springs, tires screeching, slide whistles, chattering teeth, explosions, suction cups and rattles.   Previous work has looked explicitly at the problem of sound event classification~\cite{soundevent}, which could be potentially used to detect violent actions in children's cartoons.  A subcategory of this research focuses solely on environmental sound classification~\cite{esc1,esc2}, classifying the subset of sounds that people experience in the everyday environment such as road noise or music.   These background sounds can add important context to video and are robust to visual disturbances such as occlusion and illumination changes.
-
-Audio representations have progressed significantly from the traditional signal processing representations such as FFTs or wavelets.  One popular representation is mel-frequency cepstral coefficients (MFCC) which are extracted from the discrete cosine transform of the log-mel spectrum~\cite{mfcc}.  In our work, we utilize the spectrogram which is a visual representation of the frequencies across time.   The spectrogram can serve as an input to convolutional neural networks or transformers.  The competition, Holistic Evaluation of Audio Representations~\cite{turian2022hear}, conducted a head to head evaluation of the benefits of different audio representations.  BYOL for Audio~\cite{niizumi_byol_2023} tackled the problem of learning audio representations that are suitable for a multiple downstream tasks.
-
-Since there are few labeled audio datasets, the emergence of large multimodal datasets provides fertile opportunities for leveraging cross-modality information.  Several audio models have built on the success of the CLIP model at exploiting video and language.  For instance, Microsoft’s CLAP~\cite{elizalde_clap_2022} model learns a joint encoding for audio and text and can ingest text prompts to perform zero shot classification on audio data. 
-% Wav2CLIP distills information from the CLIP model. 
-% Our research uses AudioCLIP (justification for why it was selected).
-    
-% - Audio classification\\
-%     - 1D vs spectrogram\\
- %     - pre-training\\
-\subsection{Prompt Learning}
-%Recent contributions in Vision-Language research have shown great potential of Prompt Learning.
-Performing fine-tuning on large pre-trained models like CLIP \cite{vanilla_clip} leads to overfitting, which deteriorates the generalization of the model. Furthermore, it is also costly in terms of computation as all parameters of the model need to be updated. Prompt learning is an efficient approach where the pre-trained model parameters remain frozen while introducing learnable vectors called tokens. This helps in adapting the model to downstream tasks while while retaining the model's knowledge gained during pre-training. This approach is less computationally intensive  and requires less training time as compared to full fine-tuning a model. Prompt learning was introduced by researchers in the NLP area where the textual representations are similarly learned in the word embedding space \cite{nlp-prompt1,nlp-prompt2,nlp-prompt3,nlp-prompt4}. The approach was also adapted for vision tasks \cite{jia2022visual_16_deep,wang2022dualprompt_38,zhang2022neural_47} and for usage within vision-language models \cite{cocoop,coop,zhu2024promptaligned_51}.  \citeauthor{jia2022visual_16_deep} (\citeyear{jia2022visual_16_deep}) compare deep prompting in vision with shallow prompting and discuss the improvements in model performance due to the former contribution. Some works have discussed prompt learning in both text and vision branches \cite{maple,vifi,vita}. \citeauthor{maple} (\citeyear{maple}) also introduce a connection between vision and language prompts to ensure synergy while prompts are learnt.
+Our Approach: Full Isolation by timer bypass and IPI suppression. In this paper, we present a novel
+and more aggressive approach to CPU isolation in Linux: We completely disable timer interrupt
+processing on selected cores, ensuring no kernel tick-related activity occurs locally; We suppress
+all non-essential inter-processor interrupts to those cores, using targeted kernel patches and
+configuration to redirect such coordination elsewhere or delay it entirely. This level of isolation is
+not achievable with existing mechanisms like NOHZ\_FULL or isolcpus alone. Our solution explicitly
+separates time-related kernel responsibilities and reassigns them to maintenance mechanism,
+which periodically execute the timer functionalities required for global correctness. Meanwhile,
+isolated cores run continuously without being interrupted by either local timers or remote IPIs.
+This approach is particularly effective in scenarios like GPIO toggling, where high precision and
+low-latency response are critical, allowing the Linux isolation kernel to efficiently manage interrupts,
+isolate processing on specific cores, and ensure that GPIO outputs are triggered in a timely manner,
+free from interrupt interference or other system task disruptions.
 
 
+\section{Related Work}\label{BG} 
+\subsection{Timer Interrupt Control in the Linux Kernel}
+The timer ticker design for Operating Systems has long exist before Linux kernel was
+developed
+%\cite{Corbet}.
+The Linux kernel schedules periodic timer interrupts (ticks) on each CPU core for timekeeping,
+process accounting, and scheduler activation. These interrupts are typically generated at (250 - 1
+K) Hz and cause the kernel to preempt running tasks for internal maintenance.
+To reduce this overhead, tickless systems were introduced. The NO\_HZ feature disables timer
+interrupts on idle CPUs, and its extension, NOHZ\_FULL, attempts to eliminate ticks even during
+user-space execution [2]. However, timer ticks still occur on NO\_HZ/NOHZ\_FULL CPUs because the
+kernel want to do statistics works[3].
+These mechanisms help reduce timer-induced jitter but do not eliminate all sources of latency.
 
 \section{Methodology}\label{M}
 Our proposed multimodal architecture amalgmates the visual, text and audio transformer encoders. The former two are adapted from Vanilla CLIP \cite{vanilla_clip} whereas the audio encoder is based on AudioCLIP \cite{audio_clip}. During training, all encoder layers of all modalities remain frozen, therefore retaining the model's pre-training knowledge while making it computationally efficient. To enhance the model's capability to be effective on the downstream task of video content moderation, prompt learning is enabled for the text and vision branches. We also introduce a fully-trainable projection layer at the end of the audio branch which learns the audio representations during training. Vanilla CLIP was tailored for the video input. We calculate the aggregate representations from both audio and vision branches.  The fused features along with the text features are then learned contrastively during training - maximizing the diagonal  (\textit{V$_{i}$},\textit{T$_{i}$}) of the cosine similarity matrix while minimizing other pairs of fused and text features. Maximizing the diagonal implies that the similarity score with the ground-truth class is maximized while others are minimized. The following sections discuss the important components of our proposed model.
