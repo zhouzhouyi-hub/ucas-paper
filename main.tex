@@ -111,11 +111,10 @@ free from interrupt interference or other system task disruptions.
 \section{Related Work}\label{BG} 
 \subsection{Timer Interrupt Control in the Linux Kernel}
 The timer ticker design for Operating Systems has long exist before Linux kernel was
-developed
-%\cite{Corbet}.
+developed\cite{Corbet}.
 The Linux kernel schedules periodic timer interrupts (ticks) on each CPU core for timekeeping,
-process accounting, and scheduler activation. These interrupts are typically generated at (250 - 1
-K) Hz and cause the kernel to preempt running tasks for internal maintenance.
+process accounting, and scheduler activation. These interrupts are typically generated at (250 - 1K) Hz
+and cause the kernel to preempt running tasks for internal maintenance.
 To reduce this overhead, tickless systems were introduced. The NO\_HZ feature disables timer
 interrupts on idle CPUs, and its extension, NOHZ\_FULL, attempts to eliminate ticks even during
 user-space execution [2]. However, timer ticks still occur on NO\_HZ/NOHZ\_FULL CPUs because the
