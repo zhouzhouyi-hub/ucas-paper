@@ -1,0 +1,260 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citeauthoryear{Ahmed \bgroup et al\mbox.\egroup }{2023}]{ahmed2023flairs}
+Ahmed, S.~H.; Khan, M.~J.; Qaisar, H. M.~U.; and Sukthankar, G.
+\newblock 2023.
+\newblock Malicious or benign? {Towards} effective content moderation for children’s videos.
+\newblock {\em The International FLAIRS Conference Proceedings} 36(1).
+
+\bibitem[\protect\citeauthoryear{Alghowinem}{2019}]{algh_audio}
+Alghowinem, S.
+\newblock 2019.
+\newblock A safer {YouTube Kids}: An extra layer of content filtering using automated multimodal analysis.
+\newblock In Arai, K.; Kapoor, S.; and Bhatia, R., eds., {\em Intelligent Systems and Applications},  294--308.
+\newblock Cham: Springer International Publishing.
+
+\bibitem[\protect\citeauthoryear{Cao, Law, and Fidler}{2019}]{fewshot}
+Cao, T.; Law, M.; and Fidler, S.
+\newblock 2019.
+\newblock A theoretical analysis of the number of shots in few-shot learning.
+\newblock {\em arXiv preprint arXiv:1909.11722}.
+
+\bibitem[\protect\citeauthoryear{Chuttur and Nazurally}{2022}]{chuttur}
+Chuttur, M.~Y., and Nazurally, A.
+\newblock 2022.
+\newblock A multi-modal approach to detect inappropriate cartoon video contents using deep learning networks.
+\newblock {\em Multimedia Tools and Applications} 81(12):16881–16900.
+
+\bibitem[\protect\citeauthoryear{COPPA}{1998}]{COPPA1998}
+COPPA.
+\newblock 1998.
+\newblock Children's online privacy protection act of 1998.
+\newblock Public Law 105-277, 112 Stat. 2681-728.
+
+\bibitem[\protect\citeauthoryear{Deng \bgroup et al\mbox.\egroup }{2009}]{image_net}
+Deng, J.; Dong, W.; Socher, R.; Li, L.-J.; Li, K.; and Fei-Fei, L.
+\newblock 2009.
+\newblock {ImageNet}: A large-scale hierarchical image database.
+\newblock In {\em IEEE Conference on Computer Vision and Pattern Recognition},  248--255.
+
+\bibitem[\protect\citeauthoryear{Elizalde \bgroup et al\mbox.\egroup }{2022}]{elizalde_clap_2022}
+Elizalde, B.; Deshmukh, S.; Ismail, M.~A.; and Wang, H.
+\newblock 2022.
+\newblock {CLAP}: {Learning} {Audio} {Concepts} {From} {Natural} {Language} {Supervision}.
+\newblock arXiv:2206.04769 [cs, eess].
+
+\bibitem[\protect\citeauthoryear{FTC}{2024}]{FTC_2024}
+FTC.
+\newblock 2024.
+\newblock The federal register.
+
+\bibitem[\protect\citeauthoryear{Gemmeke \bgroup et al\mbox.\egroup }{2017}]{audio_set}
+Gemmeke, J.~F.; Ellis, D.~P.; Freedman, D.; Jansen, A.; Lawrence, W.; Moore, R.~C.; Plakal, M.; and Ritter, M.
+\newblock 2017.
+\newblock Audio set: An ontology and human-labeled dataset for audio events.
+\newblock In {\em IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)},  776--780.
+\newblock IEEE.
+
+\bibitem[\protect\citeauthoryear{Guzhov \bgroup et al\mbox.\egroup }{2021a}]{esresnext}
+Guzhov, A.; Raue, F.; Hees, J.; and Dengel, A.
+\newblock 2021a.
+\newblock {Esresne (x) t-fbsp}: Learning robust time-frequency transformation of audio.
+\newblock In {\em International Joint Conference on Neural Networks (IJCNN)},  1--8.
+\newblock IEEE.
+
+\bibitem[\protect\citeauthoryear{Guzhov \bgroup et al\mbox.\egroup }{2021b}]{audio_clip}
+Guzhov, A.; Raue, F.; Hees, J.; and Dengel, A.
+\newblock 2021b.
+\newblock Audioclip: Extending {CLIP} to image, text and audio.
+
+\bibitem[\protect\citeauthoryear{Hapkiewicz}{1979}]{violent_cartoons_psycho}
+Hapkiewicz, W.~G.
+\newblock 1979.
+\newblock Children’s reactions to cartoon violence.
+\newblock {\em Journal of Clinical Child Psychology} 8(1):30–34.
+
+\bibitem[\protect\citeauthoryear{Hayes}{2024}]{ytusagedaily}
+Hayes, A.
+\newblock 2024.
+\newblock {YouTube} stats: Everything you need to know in 2024!
+
+\bibitem[\protect\citeauthoryear{He \bgroup et al\mbox.\egroup }{2015}]{resnet50}
+He, K.; Zhang, X.; Ren, S.; and Sun, J.
+\newblock 2015.
+\newblock Deep residual learning for image recognition.
+
+\bibitem[\protect\citeauthoryear{Hinkley and McCann}{2018}]{babysitting_tool}
+Hinkley, T., and McCann, J.~R.
+\newblock 2018.
+\newblock Mothers’ and father’s perceptions of the risks and benefits of screen time and physical activity during early childhood: a qualitative study.
+\newblock {\em BMC Public Health} 18(1):1--8.
+
+\bibitem[\protect\citeauthoryear{Jia \bgroup et al\mbox.\egroup }{2022}]{jia2022visual_16_deep}
+Jia, M.; Tang, L.; Chen, B.-C.; Cardie, C.; Belongie, S.; Hariharan, B.; and Lim, S.-N.
+\newblock 2022.
+\newblock Visual prompt tuning.
+
+\bibitem[\protect\citeauthoryear{Jiang \bgroup et al\mbox.\egroup }{2020}]{nlp-prompt2}
+Jiang, Z.; Xu, F.~F.; Araki, J.; and Neubig, G.
+\newblock 2020.
+\newblock How can we know what language models know?
+
+\bibitem[\protect\citeauthoryear{Khattak \bgroup et al\mbox.\egroup }{2023}]{maple}
+Khattak, M.~U.; Rasheed, H.; Maaz, M.; Khan, S.; and Khan, F.~S.
+\newblock 2023.
+\newblock {MaPLe}: Multi-modal prompt learning.
+\newblock (arXiv:2210.03117).
+\newblock arXiv:2210.03117 [cs].
+
+\bibitem[\protect\citeauthoryear{Klatte, Bergström, and Lachmann}{2013}]{loud_noise_psycho}
+Klatte, M.; Bergström, K.; and Lachmann, T.
+\newblock 2013.
+\newblock Does noise affect learning? {A} short review on noise effects on cognitive performance in children.
+\newblock {\em Frontiers in Psychology} 4.
+
+\bibitem[\protect\citeauthoryear{Le, Tandon, and Oinar}{2022}]{samba}
+Le, B.~M.; Tandon, R.; and Oinar, C.
+\newblock 2022.
+\newblock Samba: Identifying inappropriate videos for young children on {YouTube}.
+\newblock In {\em Proceedings of the ACM International Conference on Information and Knowledge Management}.
+
+\bibitem[\protect\citeauthoryear{Li \bgroup et al\mbox.\egroup }{2022}]{nlp-prompt4}
+Li, Y.; Liang, F.; Zhao, L.; Cui, Y.; Ouyang, W.; Shao, J.; Yu, F.; and Yan, J.
+\newblock 2022.
+\newblock Supervision exists everywhere: A data efficient contrastive language-image pre-training paradigm.
+
+\bibitem[\protect\citeauthoryear{Lillard and Peterson}{2011}]{fast_motion_psycho}
+Lillard, A.~S., and Peterson, J.
+\newblock 2011.
+\newblock The immediate impact of different types of television on young children’s executive function.
+\newblock {\em Pediatrics} 128(4):644–649.
+
+\bibitem[\protect\citeauthoryear{McLoughlin \bgroup et al\mbox.\egroup }{2015}]{soundevent}
+McLoughlin, I.; Zhang, H.; Xie, Z.; Song, Y.; and Xiao, W.
+\newblock 2015.
+\newblock Robust sound event classification using deep neural networks.
+\newblock {\em IEEE/ACM Transactions on Audio, Speech, and Language Processing} 23(3):540--552.
+
+\bibitem[\protect\citeauthoryear{Niizumi \bgroup et al\mbox.\egroup }{2023}]{niizumi_byol_2023}
+Niizumi, D.; Takeuchi, D.; Ohishi, Y.; Harada, N.; and Kashino, K.
+\newblock 2023.
+\newblock {BYOL} for {Audio}: {Exploring} {Pre}-{Trained} {General}-{Purpose} {Audio} {Representations}.
+\newblock {\em IEEE/ACM Transactions on Audio, Speech, and Language Processing} 31:137--151.
+
+\bibitem[\protect\citeauthoryear{Ortutay}{2023}]{lawsuit}
+Ortutay, B.
+\newblock 2023.
+\newblock States sue {Meta} claiming its social platforms are addictive and harm children’s mental health.
+
+\bibitem[\protect\citeauthoryear{Papadamou \bgroup et al\mbox.\egroup }{2021}]{Papadamou}
+Papadamou, K.; Papasavva, A.; Zannettou, S.; Blackburn, J.; Kourtellis, N.; Leontiadis, I.; Stringhini, G.; and Sirivianos, M.
+\newblock 2021.
+\newblock Disturbed {YouTube for Kids}: Characterizing and detecting inappropriate videos targeting young children.
+\newblock (arXiv:1901.07046).
+\newblock arXiv:1901.07046 [cs].
+
+\bibitem[\protect\citeauthoryear{Piczak}{2015}]{esc2}
+Piczak, K.~J.
+\newblock 2015.
+\newblock {ESC}: {Dataset} for {Environmental Sound Classification}.
+\newblock In {\em Proceedings of the 23rd {Annual ACM Conference} on {Multimedia}},  1015--1018.
+\newblock {ACM Press}.
+
+\bibitem[\protect\citeauthoryear{Radford \bgroup et al\mbox.\egroup }{2021}]{vanilla_clip}
+Radford, A.; Kim, J.~W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; Krueger, G.; and Sutskever, I.
+\newblock 2021.
+\newblock Learning transferable visual models from natural language supervision.
+
+\bibitem[\protect\citeauthoryear{Rasheed \bgroup et al\mbox.\egroup }{2023}]{vifi}
+Rasheed, H.; Khattak, M.~U.; Maaz, M.; Khan, S.; and Khan, F.~S.
+\newblock 2023.
+\newblock {ViFi-CLIP}: Fine-tuned {CLIP} models are efficient video learners.
+\newblock (arXiv:2212.03640).
+\newblock arXiv:2212.03640 [cs].
+
+\bibitem[\protect\citeauthoryear{Shewale}{2024}]{Shewale_2024a}
+Shewale, R.
+\newblock 2024.
+\newblock Video marketing statistics in 2024 (usage, roi and more).
+
+\bibitem[\protect\citeauthoryear{Shin \bgroup et al\mbox.\egroup }{2020}]{nlp-prompt1}
+Shin, T.; Razeghi, Y.; Logan~IV, R.~L.; Wallace, E.; and Singh, S.
+\newblock 2020.
+\newblock {A}uto{P}rompt: {E}liciting {K}nowledge from {L}anguage {M}odels with {A}utomatically {G}enerated {P}rompts.
+\newblock In Webber, B.; Cohn, T.; He, Y.; and Liu, Y., eds., {\em Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP)},  4222--4235.
+\newblock Online: Association for Computational Linguistics.
+
+\bibitem[\protect\citeauthoryear{Tahir \bgroup et al\mbox.\egroup }{2020}]{tahir_audio}
+Tahir, R.; Ahmed, F.; Saeed, H.; Ali, S.; Zaffar, F.; and Wilson, C.
+\newblock 2020.
+\newblock Bringing the kid back into {YouTube Kids}: detecting inappropriate content on video streaming platforms.
+\newblock ASONAM '19,  464–469.
+\newblock New York, NY, USA: Association for Computing Machinery.
+
+\bibitem[\protect\citeauthoryear{TikTok}{2024}]{TikTokContentMod}
+TikTok.
+\newblock 2024.
+\newblock Our approach to content moderation.
+
+\bibitem[\protect\citeauthoryear{Tripathi and Mishra}{2021}]{esc1}
+Tripathi, A.~M., and Mishra, A.
+\newblock 2021.
+\newblock Environment sound classification using an attention-based residual neural network.
+\newblock {\em Neurocomput.} 460(C):409–423.
+
+\bibitem[\protect\citeauthoryear{Turian \bgroup et al\mbox.\egroup }{2022}]{turian2022hear}
+Turian, J.; Shier, J.; Khan, H.~R.; Raj, B.; Schuller, B.~W.; Steinmetz, C.~J.; Malloy, C.; Tzanetakis, G.; Velarde, G.; McNally, K.; Henry, M.; Pinto, N.; Noufi, C.; Clough, C.; Herremans, D.; Fonseca, E.; Engel, J.; Salamon, J.; Esling, P.; Manocha, P.; Watanabe, S.; Jin, Z.; and Bisk, Y.
+\newblock 2022.
+\newblock {HEAR: Holistic Evaluation of Audio Representations}.
+
+\bibitem[\protect\citeauthoryear{Vimal \bgroup et al\mbox.\egroup }{2021}]{mfcc}
+Vimal, B.; Surya, M.; Darshan; Sridhar, V.; and Ashok, A.
+\newblock 2021.
+\newblock {MFCC} based audio classification using machine learning.
+\newblock In {\em International Conference on Computing Communication and Networking Technologies (ICCCNT)},  1--4.
+
+\bibitem[\protect\citeauthoryear{Wang \bgroup et al\mbox.\egroup }{2022}]{wang2022dualprompt_38}
+Wang, Z.; Zhang, Z.; Ebrahimi, S.; Sun, R.; Zhang, H.; Lee, C.-Y.; Ren, X.; Su, G.; Perot, V.; Dy, J.; and Pfister, T.
+\newblock 2022.
+\newblock Dualprompt: Complementary prompting for rehearsal-free continual learning.
+
+\bibitem[\protect\citeauthoryear{Wasim \bgroup et al\mbox.\egroup }{2023}]{vita}
+Wasim, S.~T.; Naseer, M.; Khan, S.; Khan, F.~S.; and Shah, M.
+\newblock 2023.
+\newblock {Vita-CLIP}: Video and text adaptive {CLIP} via multimodal prompting.
+\newblock (arXiv:2304.03307).
+\newblock arXiv:2304.03307 [cs, eess].
+
+\bibitem[\protect\citeauthoryear{YouTube}{2024}]{YouTubeContentMod}
+YouTube.
+\newblock 2024.
+\newblock How does {YouTube} manage harmful content?
+
+\bibitem[\protect\citeauthoryear{Zhang, Zhou, and Liu}{2022}]{zhang2022neural_47}
+Zhang, Y.; Zhou, K.; and Liu, Z.
+\newblock 2022.
+\newblock Neural prompt search.
+
+\bibitem[\protect\citeauthoryear{Zhong, Friedman, and Chen}{2021}]{nlp-prompt3}
+Zhong, Z.; Friedman, D.; and Chen, D.
+\newblock 2021.
+\newblock Factual probing is [mask]: Learning vs. learning to recall.
+
+\bibitem[\protect\citeauthoryear{Zhou \bgroup et al\mbox.\egroup }{2022a}]{cocoop}
+Zhou, K.; Yang, J.; Loy, C.~C.; and Liu, Z.
+\newblock 2022a.
+\newblock Cocoop: Conditional prompt learning for vision-language models.
+\newblock (arXiv:2203.05557).
+
+\bibitem[\protect\citeauthoryear{Zhou \bgroup et al\mbox.\egroup }{2022b}]{coop}
+Zhou, K.; Yang, J.; Loy, C.~C.; and Liu, Z.
+\newblock 2022b.
+\newblock Coop: Learning to prompt for vision-language models.
+\newblock {\em International Journal of Computer Vision} 130(9):2337–2348.
+
+\bibitem[\protect\citeauthoryear{Zhu \bgroup et al\mbox.\egroup }{2024}]{zhu2024promptaligned_51}
+Zhu, B.; Niu, Y.; Han, Y.; Wu, Y.; and Zhang, H.
+\newblock 2024.
+\newblock Prompt-aligned gradient for prompt tuning.
+
+\end{thebibliography}
