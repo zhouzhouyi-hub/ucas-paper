@@ -118,258 +118,249 @@ and cause the kernel to preempt running tasks for internal maintenance.
 To reduce this overhead, tickless systems were introduced. The NO\_HZ feature disables timer
 interrupts on idle CPUs, and its extension, NOHZ\_FULL, attempts to eliminate ticks even during
 user-space execution\cite{KernelDocNOHZ}. However, timer ticks still occur on NO\_HZ/NOHZ\_FULL CPUs because the
-kernel want to do statistics works[3].
+kernel want to do statistics works\cite{stackoverflow}.
 These mechanisms help reduce timer-induced jitter but do not eliminate all sources of latency.
 
-\section{Methodology}\label{M}
-Our proposed multimodal architecture amalgmates the visual, text and audio transformer encoders. The former two are adapted from Vanilla CLIP \cite{vanilla_clip} whereas the audio encoder is based on AudioCLIP \cite{audio_clip}. During training, all encoder layers of all modalities remain frozen, therefore retaining the model's pre-training knowledge while making it computationally efficient. To enhance the model's capability to be effective on the downstream task of video content moderation, prompt learning is enabled for the text and vision branches. We also introduce a fully-trainable projection layer at the end of the audio branch which learns the audio representations during training. Vanilla CLIP was tailored for the video input. We calculate the aggregate representations from both audio and vision branches.  The fused features along with the text features are then learned contrastively during training - maximizing the diagonal  (\textit{V$_{i}$},\textit{T$_{i}$}) of the cosine similarity matrix while minimizing other pairs of fused and text features. Maximizing the diagonal implies that the similarity score with the ground-truth class is maximized while others are minimized. The following sections discuss the important components of our proposed model.
-% Prompt learning and projection layer training are described in detail in sections \ref{promptlearninglabel} and \ref{projlayerlabel}, respectively.
+\subsection{Inter-Processor Interrupts (IPIs) and Their Effects}
+Inter-process interrupts (IPIs) in Linux can impact real-time performance by introducing
+unpredictable latency, as they force a CPU to handle interrupts from another processor,
+potentially preempting time-critical tasks. In real-time systems, where deterministic scheduling
+and minimal latency are crucial, IPIs—used for tasks like TLB flushes, cache management, or
+scheduler balancing—can cause delays if they trigger during high-priority real-time execution.
+Unlike timer interrupts, IPIs are externally triggered and often asynchronous. This means that even
+tickless CPUs may receive unexpected IPIs, introducing nondeterministic latency and cache
+disruptions. Existing work recognizes this as a major obstacle to achieving strict real-time
+performance in Linux \cite{YuxinRen}.
 
 
-\subsection{Adapting CLIP for Audio and Video}
-
-\subsubsection{Pre-training Audio Encoder}
-The pre-trained audio head which we include in our model is ESResNe(X)t \cite{esresnext} which is trained in four stages: 1) initialized with ImageNet weights \cite{image_net}, 2) fine-tuned on the AudioSet dataset \cite{audio_set} as a standalone model, 3) trained as part of the AudioCLIP model \cite{audio_clip} keeping text and vision branches frozen, and finally 4) fully trained with all three encoders of AudioCLIP fully trainable. 
-
-\subsubsection{Training Projection Layer}\label{projlayerlabel}
-In order to improve performance on the downstream task of classifying malicious and benign videos we introduce a fully-learnable projection layer while keeping the audio head frozen. Freezing the audio encoder layers not only helps in preventing catastrophic forgetting of the knowledge gained during pre-training but is also computationally efficient as the frozen parameters do not need to be updated during training. The projection layer dimensions are \textit{$1024 \times 512$}. ESResNe(X)t uses the ResNet50 backbone \cite{resnet50} which has an embedding dimension of \textit{1024}.  To make the output dimension compatible with CLIP's vision backbone we choose \textit{512} as the projection layer's output dimension size.
-
-\subsubsection{Adapting CLIP for Video}
-CLIP is jointly pre-trained on images and text; in order to train on video input we perform Temporal Pooling. The result of Temporal Pooling is a combined representation of all \textit{T} input frames of a video; the temporal information is accumulated by averaging frame-level features. Hence, the representation of visual features of a video with dimension \textit{$T \times 512$} transforms to \textit{$1 \times 512$}. 
-Here, the dimension 512 denotes the embedding size of the vision transformer base model ViT-B/16. 
-
-\subsubsection{Feature Fusion}
-The output of the audio and vision encoders are individual representations of the acoustic and visual features respectively. Mixing both types of feature representations provides the model with additional context about the scene. During feature fusion we construct a joint representation by adding the audio and visual feature representations. The input (visual and audio) and the fused embedding dimensions are \textit{$1 \times 512$} .
-
-\subsection{Learning Prompt Representations}\label{promptlearninglabel}
-
-To reduce the training time and computation cost of fine-tuning CLIP for the downstream task of video content moderation we disable the learning of the pre-trained text and video encoder parameters and employ learnable tokens on both branches. Figure \ref{fig:model} illustrates the proposed model. Prompting in both branches helps prompt tokens learn the context more effectively as the prompts adapt textual, in addition to vision representations jointly. Furthermore, we perform the learning of prompts in multiple layers, referred to as deep prompting \cite{maple}. Learning deep prompts especially helps in boosting performance for low data regimes. Since our benchmark dataset, MMOB, is not very large, deep prompting has the potential to improve performance as compared to shallow prompting where only prompting is performed in one or few layers. The dataset is available at \url{https://github.com/syedhammadahmed/mmob}.
-
-A series of experiments was conducted to explore how activation or deactivation of prompt learning in the vision branch of the adapted CLIP model affects overall accuracy. We also investigate whether results improve if we increase 1) the depth of prompt token training, and 2) the number of tokens. The results show that having prompt learning enabled in both text and vision branches of our adapted CLIP model gives the best accuracy. Similarly, increasing the number of prompt tokens in a layer improves the classification accuracy. A similar trend was observed when we increase the learning depth in terms of layers. The detailed discussion on these ablations is included in the Experiments section of this paper.
-
-\begingroup
-\renewcommand{\arraystretch}{1.6}
-\begin{table}[h]
-\centering
-
-\begin{tabularx}{0.4\textwidth} { 
-  %>{\raggedright\arraybackslash}X 
-   >{\centering\arraybackslash}X 
-  %| >{\centering\arraybackslash}X 
-  %| >{\centering\arraybackslash}X
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X}
- %\multirow{2}{5em}{\textbf{Base \quad Model}} & 
- \multicolumn{3}{c}{} \\
- \hline
- \textbf{Malicious} & \textbf{Benign} & \textbf{Total}\\ 
- \hline
- \hline
- 305 & 830 & 1135\\
-\end{tabularx}
-\caption{Distribution of malicious and benign videos in the MMOB dataset.}
-\label{table:dataset}
-\end{table}
-\endgroup
-
-\section{Experiments}\label{BE}
-\subsection{The Multimodal Malicious or Benign Dataset}
-We curate the \textbf{M}ultimodal \textbf{M}alicious \textbf{o}r \textbf{B}enign (MMOB) dataset by selecting the samples containing malicious videos with malicious audio tracks, and benign videos with benign audio tracks. The samples have been adapted from the MOB dataset \cite{ahmed2023flairs}. MOB is a cartoon video dataset including visual annotations only. We extract the audio from the videos and generate the test-train splits for this new multimodal dataset. %This dataset and the data loader code are publicly available for further proposed improvements of baseline results. 
-Table \ref{table:dataset} shows the class-wise sample counts.
-
-\subsection{Training and Evaluation} 
-We evaluate the model with the MMOB dataset in both supervised and few-shot settings. For the supervised learning setting, we use the full training split of our dataset while for the few shot learning settings, a subset of $k_i = {0, 1, 2, 4, 8, 16}$ videos is randomly sampled from the training split. For all experiments, we use ViT-B/16 as our base model which is pre-trained using CLIP. 
-% e hyper-parameters for ViT base models are depicted in Table \ref{table:modelcomp}. 
-
-For the default setup, we employ 12 layers of prompt learning for both the CLIP Text encoder and CLIP Video encoder. Furthermore, each encoder utilizes prompt learning with 12 tokens. It's worth noting that, in our case, the projection layer at the end of the audio head is learned during the training process.
-
-% add patch size in column and then discuss why performance deteriorates with increasing patch size
-
-During the training, we take 16 frames for each video along with the associated sound spectograms and use the class label as text. We also pass on learnable prompts to both video encoder and text encoder where $X$ represents the number of tokens used by the video encoder while $Y$ represents the number of tokens for text encoder. For most of the experiments, the default value of 12 tokens for both video encoder and text encoder is used. However, to analyze the impact of these learnable prompts, we evaluate the effect of decreasing the number of tokens.  The learning rate is set to $8\times10^{-5}$ in all experiments. Lastly, the depth of the encoders is represented by $D$ as depicted in Figure \ref{fig:model}.
-
-\subsection{Results and Discussion}
-
-In this section, we present our empirical analysis using the pre-trained Vanilla CLIP model, where the base model ViT-B/16 is used, unless explicitly mentioned otherwise. Throughout our experiments, we leverage all modalities for both base models. Furthermore, we maintain the default settings for the number of tokens and the depth of text prompt layers i.e. 10 and 12, respectively. Notably, ViT-B/16 demonstrated superior performance compared to ViT-B/32, achieving an improvement of over 5.5\%. The reason ViT-B/16 may exhibit better performance than ViT-B/32 can be attributed to the finer details captured by the smaller patch size. We fine-tune Vanilla CLIP with both base models for 20 epochs and report the accuracy in Table \ref{table:main_res}.    
+To mitigate the impact of inter-processor interrupts (IPIs) on real-time performance, we must
+systematically identify and address each IPI source individually. For instance, unloading block
+devices in Linux will trigger IPI, we avoid dynamically unloading them in real-time critical
+environments. Similarly, since CPU frequency statistics require a IPI to get frequency from another
+CPU, we disable frequency scaling or use a fixed frequency mode to eliminate such overhead. By
+analyzing and selectively disabling IPI-inducing operations—such as TLB shootdowns, RCU
+callbacks, or scheduler balancing—we eliminate all the unnecessary cross-core interruptions,
+ensuring deterministic latency for real-time tasks. This targeted approach, combined with CPU
+isolation and IRQ affinity tuning, helps maintain hard real-time guarantees in Linux systems.
 
 
-\begingroup
-\renewcommand{\arraystretch}{1.6}
-\begin{table}[h]
-\centering
-
-\begin{tabularx}{0.47\textwidth} { 
-  %>{\raggedright\arraybackslash}X 
-   >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X
-  | >{\centering\arraybackslash}X}
- %\multirow{2}{5em}{\textbf{Base \quad Model}} & 
- \multicolumn{3}{c |}{\textbf{Modalities}} & \multicolumn{3}{c |}{\textbf{Learnable}} & \multirow{2}{5em}{\textbf{Acc}}\\ 
- \cline{1-6} 
- %& 
- \textbf{Text} & \textbf{Video} & \textbf{Audio} & \textbf{Text} & \textbf{Video} & \textbf{Audio} & \\
- \hline
- \hline
- %\multirow{3}{ViT-B/16} & 
- \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{81.49}\\
- 
- \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\ding{55}} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\ding{55}} & 78.41 \\ 
- %& 
- \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\ding{55}} & \textbf{\checkmark} & \textbf{\ding{55}} & \textbf{\ding{55}} & 76.65 \\ 
- %& 
- \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\ding{55}} & \textbf{\checkmark} & 78.21 \\ 
-\end{tabularx}
-\caption{Adding modality and learning prompts (text/video) along with the projection layer (audio) improves the overall accuracy of the model.}
-\label{table:modalities}
-\end{table}
-\endgroup
+\subsection{CPU Isolation Techniques}
+The Linux isolcpus and irqaffinity \cite{KernelDocParam} allow a processor core to be isolated from the general
+scheduler and external interrupts, effectively preventing it from handling most kernel tasks and
+services such as RCU callbacks. However, these mechanisms do not prevent all types of
+interruptions. Specifically, they cannot disable timer interrupts or inter-processor interrupts (IPIs),
+which may still be delivered to the isolated core. As a result, while these tools can reduce
+interference from the operating system, they do not achieve complete isolation at the hardware
+interrupt level.
 
 
+The Redhawk Linux RTOS\cite{redhawk} eliminates the impact of clock interrupts on the OS through its unique
+technologies. By modifying mechanisms such as , it significantly reduces the influence of inter-core
+interrupts on system performance. However, the system does not completely eliminate inter-core
+interrupts on isolated cores; instead, it allows them to occur conditionally.
 
-\begingroup
-\renewcommand{\arraystretch}{1.6}
-\begin{table*}[htp]
-\centering
+\section{Methodology}\label{BE}
 
-\begin{tabularx}{\textwidth} { 
-  >{\raggedright\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X }
- \multirow{2}{5em}{\textbf{Base \quad Model}} & \multicolumn{3}{c |}{\textbf{Modalities}} & \multicolumn{3}{c |}{\textbf{Learnable Prompts}} & \multicolumn{2}{c |}{\textbf{No. of Tokens}} & \multicolumn{2}{c |}{\textbf{Prompt Depth}} & \multirow{2}{5em}{\textbf{Accuracy}}\\ 
- \cline{2-11} 
- & \textbf{Text} & \textbf{Video} & \textbf{Audio} & \textbf{Text} & \textbf{Video} & \textbf{Audio} & \textbf{Text} & \textbf{Video} & \textbf{Text} & \textbf{Video} & \\
- \hline
- \hline
- ViT-B/16 & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & 12 & 12 & 12 & 12 & \textbf{81.49} \\
- ViT-B/32 & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & 12 & 12 & 12 & 12 & 77.09
- % ViT-L/14 & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & \textbf{\checkmark} & 12 & 12 & 12 & 12 & 78.85
- 
-\end{tabularx}
-\caption{Results of fine-tuning CLIP on our MMOB dataset with different base models and learnable prompts. ViT-B/16 achieves better accuracy in comparison to the other model. Both models have been fine-tuned for 20 epochs.}
-\label{table:main_res}
-\end{table*}
-\endgroup
+This section describes the kernel-level design, isolation strategy, and implementation workflow we
+employed to eliminate system noise on real-time application cores without delegating
+maintenance tasks to external housekeeping cores. In contrast to traditional separation
+approaches, our system uses a novel method where the application core periodically invokes
+maintenance handlers via a centralized interface. This design is made possible through the custom
+Isolator API v0.1, which we developed to enable complete tick and IPI suppression while
+preserving system functionality through cooperative execution.
 
-\subsubsection{Impact of Adding Audio Modality and Learnable Prompts}
 
-We evaluate the improvement derived from adding the audio modality, deep learnable prompts on both vision and text branches, and enabling the learning of the projection layer deployed at the end of the audio encoder. Our approach involves systematically eliminating modalities and learnable modules, one at a time in each experiment. To better understand the impact of these configuration changes we maintain a consistent number of prompts and depth of prompt layers. The ensuing analysis of the model's performance is presented in Table \ref{table:modalities}. As anticipated, the inclusion of additional modalities and prompt learning contributes positively to the overall accuracy. The baseline accuracy of 81.49 \% in the supervised setting was observed in the configuration where we include 1) audio modality with video, 2) prompting in language and vision branches, and 3) learning of the audio projection layer.    
+\subsection{System Design Overview}
 
-\subsubsection{Impact of Token Length}
+Our approach is centered on full in-core isolation, where a single CPU core both executes the real-
+time workload and explicitly handles minimal kernel maintenance at predefined intervals. Instead
+of relying on external housekeeping cores, the application periodically calls into a user-space
+handler () that triggers deferred kernel functions such as timekeeping, scheduling updates, and
+RCU progress.
 
-To delve deeper into the model's performance, we systematically diminish the number of tokens in our investigation. In this set of experiments, we maintain the utilization of all three modalities, each equipped with learnable prompt layers. The sole variation lies in the adjustment of token quantity. Table \ref{table:tokens} provides a comprehensive summary of the results derived from these experiments. Using a greater number of tokens positively contributes to the learning of the model. 
 
-\begingroup
-\renewcommand{\arraystretch}{1.6}
-\begin{table}[h]
-\centering
+To achieve this, we built an isolation runtime system that operates in three main phases:
+Start of Isolation: The application invokes with a bitmask specifying which categories of kernel
+noise to suppress (e.g., timer ticks, IPIs, and resched interrupts).
 
-\begin{tabularx}{0.4\textwidth} { 
-  %>{\raggedright\arraybackslash}X 
-   >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  %| >{\centering\arraybackslash}X
-  %| >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X}
- %\multirow{2}{5em}{\textbf{Base \quad Model}} & 
- \multicolumn{2}{c |}{\textbf{No. of Tokens}} & \multirow{2}{5em}{\textbf{Accuracy}}\\ 
- \cline{1-2} 
- %& 
- \textbf{Text} & \textbf{Video} &  \\
- \hline
- \hline
- %\multirow{3}{ViT-B/16} & 
- 10 & 10 & \textbf{81.49}\\ 
- 10 & 8 & 80.17\\ 
- 10 & 6 & 79.29\\ 
- 10 & 4 & 77.97\\ 
-\end{tabularx}
-\caption{Increasing the number of learnable prompt tokens improves performance. }
-\label{table:tokens}
-\end{table}
-\endgroup
 
-\subsubsection{Impact of Prompt Learning Depth}
-The role of prompt learning is pivotal in recent vision-language models. In this series of experiments, we specifically explore the influence of prompt learning depth. Once more, we employ all three modalities, maintaining a consistent token count of 10 for both text and video heads. The outcomes of these experiments are detailed in Table \ref{table:prompt}. A discernible pattern emerges, indicating that as the depth of prompt learning increases, there is a corresponding enhancement in the model's accuracy.
+Polling Execution Phase: The application enters a tight loop performing real-time operations (e.g.,
+GPIO toggling). During each iteration, it calls at regular intervals to perform minimal
+kernel duties without relying on interrupts.
 
-\begingroup
-\renewcommand{\arraystretch}{1.6}
-\begin{table}[h]
-\centering
 
-\begin{tabularx}{0.4\textwidth} { 
-  %>{\raggedright\arraybackslash}X 
-   >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X 
-  %| >{\centering\arraybackslash}X
-  %| >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X}
- %\multirow{2}{5em}{\textbf{Base \quad Model}} & 
- \multicolumn{2}{c |}{\textbf{Depth of Prompt Learning}} & \multirow{2}{5em}{\textbf{Accuracy}}\\ 
- \cline{1-2} 
- %& 
- \textbf{Text} & \textbf{Video} &  \\
- \hline
- \hline
- %\multirow{3}{ViT-B/16} & 
- 12 & 12 & \textbf{81.49}\\ 
- 8 & 8 & 80.61\\ 
- 4 & 4 & 77.97\\ 
- 2 & 2 & 75.77\\ 
-\end{tabularx}
-\caption{Multiple depth levels for prompt learning also enhance model's performance.}
-\label{table:prompt}
-\end{table}
-\endgroup
+End of Isolation: When the application finishes or relinquishes real-time control, it calls to restore
+the core’s default interrupt behavior.
 
-\subsubsection{Few-shot Setting}
 
-Given that Vanilla CLIP is a pretrained network, it lends itself well to few-shot learning. In these experiments, we introduce the few-shot learning parameter, denoted as $k$, with values specified as $k_i = \{0, 1, 2, 4, 8, 16\}$. This means that for each class, we utilize $k_i$ samples, while keeping the other parameters set to their original values. The samples are drawn uniformly from each class without replacement.
+This model results in a hybrid kernel-user coordination framework that blends user-driven
+maintenance with aggressive in-kernel suppression of interruptions
 
-\begingroup
-\renewcommand{\arraystretch}{1.6}
-\begin{table}[h]
-\centering
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\columnwidth]{architecture.png}
+    \caption{System architecture.}
+    \label{fig:architecture}
+\end{figure}
 
-\begin{tabularx}{0.4\textwidth} { 
-  %>{\raggedright\arraybackslash}X 
-   >{\centering\arraybackslash}X 
-  %| >{\centering\arraybackslash}X 
-  %| >{\centering\arraybackslash}X
-  %| >{\centering\arraybackslash}X 
-  | >{\centering\arraybackslash}X}
- %\multirow{2}{5em}{\textbf{Base \quad Model}} & 
- \textbf{$k_i$} & \textbf{Accuracy}\\ 
- \hline
- \hline
- %\multirow{3}{ViT-B/16} & 
- 0 & 59.47\\
- 1 & 63.01\\
- 2 & \textbf{64.75}\\ 
- 4 & 63.87\\ 
- 8 & 61.67\\ 
- 16 & 54.18\\ 
-\end{tabularx}
-\caption{Few shot learning for various $k$ samples of each class.}
-\label{table:kshot}
-\end{table}
-\endgroup
+\subsection{Interrupt Suppression and Timer Bypass} 
+The kernel was modified to recognize the isolator state of a core. When isolation is active, the
+core's local tick logic (in and ) is bypassed entirely unless triggered by . Furthermore, we suppress
+or reroute all asynchronous IPIs that could disrupt the core. This includes:
+RCU and TLB IPIs: Deferred and processed only during the maintenance invocation.
+Reschedule Interrupts: Suppressed via unless manually enabled.
+Frequency Scaling: Disabled to prevent CPU freq gathering triggered IPIs.
+To maintain a valid notion of system time, we provide a monotonic time interface (), which returns
+a linealized timestamp in microseconds. Additionally, allows predictable wake-ups in polling loops
+without enabling standard kernel timers.
 
-In few shot learning experiments, we see an interesting trend. For $k = 2$, the model achieves the highest accuracy while as the value of $k$ increases, the accuracy drops. This trend is shown in Table \ref{table:kshot}.  The choice of $k$ affects the intrinsic dimensionality of the learned embedding space, hence increasing $k$ does not result in monotonic performance improvements~\cite{fewshot}.
+\subsection{Memory and Communication Management}
+Memory operations required during isolation are supported through and to ensure deterministic
+behavior without invoking general-purpose allocators. For core-to-core interactions, provides a
+safe messaging mechanism by proxying requests to another non-isolated core. This eliminates the
+need for interrupts to wake remote threads.
+Callback functions for inter-core communication are registered via to allow non-intrusive
+notification delivery. This design ensures that all communication remains strictly user-driven.
 
-\section{Conclusion and Future Work}
-This paper highlights the importance of leveraging the audio modality for the problem of content moderation of children's videos. We introduce a new multimodal architecture that adds a pre-trained audio encoder with a learnable projection layer to the adapted CLIP model. Our adapted model averages video frames to create a visual representation and learns prompts on both branches of Vanilla CLIP (text and vision). This contribution enhances the overall training and performance of video content moderation.  We also created a multimodal dataset, MMOB, for this task that includes audio annotations.  In future work, we intend to extend our work to other types of online video content including YouTube shorts, Facebook reels, and TikTok videos. These short duration videos are popular with viewers but may create negative impacts such as reducing attention span. Lastly, we plan to work on the problem of moderating the advertisements that accompany children's videos.  From personal experience browsing these platforms, we observed that although a video may be appropriate for viewing by young children the advertisements occasionally contain unsuitable content.
+\subsection{Isolation Monitoring and Debugging}
+To support verification and monitoring, we implemented a real-time statistics collector using ,
+which tracks the types and number of interrupts blocked or deferred on each core. These statistics
+allow developers to verify the success of isolation policies under different workloads and tuning
+configurations.
+
+\subsection{Evaluation Strategy}
+Our experimental evaluation used a DPDK-based real-time packet processing workload running on
+a custom-patched Linux kernel (v5.15 PREEMPT\_RT). We allocated two isolated cores to handle
+high-frequency RX/TX polling. For latency measurement, we replaced hardware timestamping
+with GPIO toggling on a Phytium board, captured using an oscilloscope to ensure precise,
+external visibility.
+We tested the jitter of DPDK forwarding using a packet generator.
+For the GPIO measurement, we used a user-space program to toggle a GPIO pin at a fixed
+frequency, generating a square wave. The jitter was observed on an oscilloscope by capturing the
+edge fluctuations of the signal, which allowed us to assess the timing precision and real-time
+stability of the system under different loads.
+
+
+\section{Implementation Details}
+This section presents a detailed overview of the kernel-level modifications we introduced to
+support high-determinism, low-jitter execution on isolated CPUs for high-performance, real-time
+packet processing. These modifications are implemented within four critical subsystems of the
+Linux kernel: RCU (Read-Copy-Update), the Real-Time Scheduler, SMP/IPI handling, and Timer Tick
+Management. In addition, we introduce a lightweight per-CPU isolation tracking mechanism that
+guides these subsystems to adapt their behavior dynamically based on the isolation state of each
+core.
+
+\subsection{Kernel Modifications Overview}
+To enable CPU isolation at a fine granularity and ensure minimal OS interference on application-
+dedicated cores, we performed targeted changes across the kernel. The key goals are to:
+Eliminate unnecessary kernel activity on isolated CPUs,
+Avoid inter-processor communication (e.g., IPIs) to reduce latency spikes,
+Defer time-based maintenance (e.g., scheduling enforcement) to application-controlled contexts,
+Maintain correctness of core kernel mechanisms while enabling custom runtime models.
+To coordinate the behavior of different kernel components, we define the following per-CPU data
+structure:
+\begin{verbatim}
+DEFINE_PER_CPU(atomic_t, isolator_counters[CONFIG_NR_CPUS]);
+\end{verbatim}
+Each entry in this array acts as a flag indicating whether the corresponding CPU is currently under
+isolation. This flag is incremented by user-space applications via a custom system call or API
+(isolator\_ticker()) and is read by kernel components to selectively disable or defer their operations.
+
+
+\subsection{RCU Grace Period Handling}
+This modification ensures that CPUs marked as isolated are treated as being in a permanent
+quiescent state by the RCU subsystem. By doing so, the system avoids unnecessary waiting on
+isolated cores during RCU grace periods. This approach maintains forward progress of the RCU
+mechanism while eliminating dependencies on cores that are no longer expected to participate in
+normal kernel activity.
+
+Such treatment is especially crucial in real-time and low-latency systems where isolated CPUs are
+fully dedicated to user-level workloads and should not incur involuntary kernel participation.
+We add following following condition to kernel function rcu\_implicit\_dynticks\_qs:
+\begin{verbatim}
+if (isolator_counters[rdp->cpu].counter) {
+   return 1; // Force quiescent state
+}
+\end{verbatim}
+Technical Implications:
+Prevents false-positive RCU stall warnings,
+maintains system-wide RCU progress without interference from isolated cores,
+Ensures correctness without compromising latency isolation.
+
+\subsection{Real-Time Scheduler Deferral}
+The changes to the real-time scheduler timer logic allow the suppression of periodic enforcement
+checks on isolated CPUs. Instead of allowing kernel timers to preempt execution at arbitrary
+intervals, bandwidth enforcement is deferred and delegated to a new handler (), which can be
+invoked explicitly by user-space code.
+This redesign ensures that real-time constraints are still respected, albeit under application
+supervision, thus balancing temporal determinism with system integrity.
+We modify the core real-time scheduler timer routine (sched\_rt\_period\_timer) as follows:
+\begin{verbatim}
+if (__this_cpu_read(ticker_counter) != 0) {
+    __this_cpu_write(ticker_rb, rt_b); // Save rt_bandwidth
+    __this_cpu_write(ticker_rt_period, rt_b->rt_period);
+   return HRTIMER_NORESTART;
+}
+\end{verbatim}
+This suppresses the default timer behavior when the CPU is isolated.
+We also introduce a new explicit handler, which can be invoked periodically:
+\begin{verbatim}
+void ticker_handle_sched_rt_timer() {
+    struct rt_bandwidth *rt_b = __this_cpu_read(ticker_rb);
+    if (rt_b && time_elapsed_since_last_check()) {
+       unsigned int overrun = calculate_overrun(rt_b);
+       do_sched_rt_period_timer(rt_b, overrun);
+       __this_cpu_write(ticker_jiffies_rt, jiffies);
+   }
+}
+\end{verbatim}
+Technical Implications
+Minimizes involuntary kernel preemption on isolated CPUs,
+Preserves schedulability enforcement via cooperative, user-controlled mechanisms,
+Reduces high-resolution timer overhead in performance-critical execution paths.
+
+\subsection{IPI Suppression}
+The suppression of inter-processor interrupts (IPIs) to isolated CPUs eliminates one of the major
+sources of external interference and cache coherence disruption in multicore systems. By
+modifying the logic responsible for IPI target selection, the kernel dynamically filters out isolated
+CPUs from cross-core signaling paths.
+This ensures that CPUs dedicated to real-time or latency-sensitive processing remain unaffected
+by kernel events originating from other cores, thereby improving predictability and scalability.
+Technical Implications
+Avoids cache line bouncing and contention due to remote invalidations,
+Improves temporal isolation between application cores and system housekeeping,
+Enhances real-time scheduling fidelity in multi-core environments.
+
+\subsection{Tickless Operation Enforcement}
+The enforcement of tickless operation for isolated CPUs is achieved by disabling the kernel's
+internal logic for restarting periodic scheduler ticks. Isolated CPUs are instead allowed to operate
+independently of the kernel's timekeeping framework unless explicitly re-engaged by user-level
+logic.
+A fallback function () is provided to perform minimal time accounting when needed, ensuring
+correctness of process time tracking while preserving user-space control.
+Technical Implications
+Enables fully tickless execution on isolated CPUs, reducing kernel-induced jitter,
+Eliminates background timer interrupts that may interfere with deterministic workloads,
+Facilitates fine-grained control over timekeeping from user space, which is critical in real-time
+systems.
+
+\section{Summary}
+Collectively, these kernel-level enhancements enable an isolation-aware runtime model optimized
+for deterministic, high-performance execution. Each subsystem is modified in a manner that
+preserves overall system correctness while respecting the isolation constraints imposed on
+specific CPUs. The design offers both temporal isolation and operational autonomy for real-time
+workloads, making it highly suitable for use cases such as packet processing, edge computing, and
+embedded systems.
+It is also important to note that the maintenance-related ticker handlers introduced in our design
+(e.g., and ) are optional in practice. In scenarios where the application cannot afford periodic
+interruption for such maintenance tasks, these handlers may be deliberately omitted. The primary
+consequence of this omission is that certain kernel statistics—such as process time accounting—
+will not be accurately recorded or reported. However, in many mission-critical or latency-sensitive
+applications, such statistical data is not essential. Similarly, the periodic handling of inter-processor
+interrupt (IPI) functionality can also be safely disabled under specific conditions. For example, if
+the application running on an isolated core does not access memory regions mapped via , then the
+corresponding IPI-based TLB shootdown mechanism may be skipped without compromising
+correctness.
 \newpage
 % \printbibliography 
 \bibliographystyle{flairs} 
