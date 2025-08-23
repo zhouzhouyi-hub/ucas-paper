@@ -117,7 +117,7 @@ process accounting, and scheduler activation. These interrupts are typically gen
 and cause the kernel to preempt running tasks for internal maintenance.
 To reduce this overhead, tickless systems were introduced. The NO\_HZ feature disables timer
 interrupts on idle CPUs, and its extension, NOHZ\_FULL, attempts to eliminate ticks even during
-user-space execution [2]. However, timer ticks still occur on NO\_HZ/NOHZ\_FULL CPUs because the
+user-space execution\cite{KernelDocNOHZ}. However, timer ticks still occur on NO\_HZ/NOHZ\_FULL CPUs because the
 kernel want to do statistics works[3].
 These mechanisms help reduce timer-induced jitter but do not eliminate all sources of latency.
 
