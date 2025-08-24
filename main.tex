@@ -260,7 +260,8 @@ Maintain correctness of core kernel mechanisms while enabling custom runtime mod
 To coordinate the behavior of different kernel components, we define the following per-CPU data
 structure:
 \begin{verbatim}
-DEFINE_PER_CPU(atomic_t, isolator_counters[CONFIG_NR_CPUS]);
+DEFINE_PER_CPU(atomic_t,
+  isolator_counters[CONFIG_NR_CPUS]);
 \end{verbatim}
 Each entry in this array acts as a flag indicating whether the corresponding CPU is currently under
 isolation. This flag is incremented by user-space applications via a custom system call or API
@@ -278,8 +279,8 @@ Such treatment is especially crucial in real-time and low-latency systems where 
 fully dedicated to user-level workloads and should not incur involuntary kernel participation.
 We add following following condition to kernel function rcu\_implicit\_dynticks\_qs:
 \begin{verbatim}
-if (isolator_counters[rdp->cpu].counter) {
-   return 1; // Force quiescent state
+if (isolator_counters[rdp->cpu].counter){
+  return 1; // Force quiescent state
 }
 \end{verbatim}
 Technical Implications:
@@ -297,21 +298,27 @@ supervision, thus balancing temporal determinism with system integrity.
 We modify the core real-time scheduler timer routine (sched\_rt\_period\_timer) as follows:
 \begin{verbatim}
 if (__this_cpu_read(ticker_counter) != 0) {
-    __this_cpu_write(ticker_rb, rt_b); // Save rt_bandwidth
-    __this_cpu_write(ticker_rt_period, rt_b->rt_period);
-   return HRTIMER_NORESTART;
+  __this_cpu_write(ticker_rb, rt_b); 
+  __this_cpu_write(ticker_rt_period,
+    rt_b->rt_period);
+  return HRTIMER_NORESTART;
 }
 \end{verbatim}
 This suppresses the default timer behavior when the CPU is isolated.
 We also introduce a new explicit handler, which can be invoked periodically:
 \begin{verbatim}
 void ticker_handle_sched_rt_timer() {
-    struct rt_bandwidth *rt_b = __this_cpu_read(ticker_rb);
-    if (rt_b && time_elapsed_since_last_check()) {
-       unsigned int overrun = calculate_overrun(rt_b);
-       do_sched_rt_period_timer(rt_b, overrun);
-       __this_cpu_write(ticker_jiffies_rt, jiffies);
-   }
+  struct rt_bandwidth *rt_b =
+         __this_cpu_read(ticker_rb);
+  if (rt_b &&
+         time_elapsed_since_last_check())
+  {
+    unsigned int overrun
+             = calculate_overrun(rt_b);
+    do_sched_rt_period_timer(rt_b, overrun);
+    __this_cpu_write(ticker_jiffies_rt,
+                            jiffies);
+  }
 }
 \end{verbatim}
 Technical Implications
@@ -343,6 +350,94 @@ Enables fully tickless execution on isolated CPUs, reducing kernel-induced jitte
 Eliminates background timer interrupts that may interfere with deterministic workloads,
 Facilitates fine-grained control over timekeeping from user space, which is critical in real-time
 systems.
+
+\section{Evaluation: Deterministic Execution with CPU Isolator}
+
+To further improve determinism, we adopt the idea of the "Gordian Knot" by employing a CPU
+Isolator technique. This approach allows a dedicated CPU core to behave like a bare-metal
+environment, running only one process with no context switching.
+
+\subsection{Isolation Strategy}
+The core mechanisms are illustrated in Figure~\ref{fig:architecture} and correspond to specific
+sources of disturbance reduction:
+\begin{enumerate}
+    \item \textbf{CPU Isolation:} Using the \texttt{isolcpus} parameter, a core is isolated from the
+    general scheduler so that it does not run user-space processes.
+    \item \textbf{Highest-Priority FIFO Process:} The target process is pinned to the isolated core,
+    assigned real-time priority 99, and run without RT throttling, thereby monopolizing the CPU.
+    \item \textbf{Interrupt Affinity:} With \texttt{irqaffinity}, device interrupts are routed to other cores,
+    ensuring the isolated core is free from external interrupt interference.
+    \item \textbf{System Interrupt Suppression:} Through kernel modifications, clock interrupts,
+    inter-processor interrupts (IPIs), and similar disturbances are blocked, detaching the isolated
+    core entirely from Linux scheduling.
+\end{enumerate}
+On such an isolated core, the program executes continuously without interruption, achieving
+near-bare-metal behavior.
+
+\subsection{Further Real-Time Optimizations}
+While CPU isolation eliminates context switching overhead, additional sources of non-determinism
+remain, such as memory, I/O, and bus contention. To minimize these:
+\begin{itemize}
+    \item \textbf{Avoid Cache Misses:} Critical code can be written in assembly, using only registers
+    to avoid memory accesses.
+    \item \textbf{Optimized I/O Access:} By mapping I/O regions with \texttt{ioremap\_np} and setting
+    them as \texttt{MT\_DEVICE\_nGnRnE}, caching and prefetching effects are eliminated.
+    \item \textbf{Interrupt Polling Mechanism:} Instead of relying on interrupts, the system actively
+    polls interrupt status registers, achieving faster response than traditional interrupt handling.
+    \item \textbf{System Register Utilization:} On GICv3 platforms, interrupt control registers can
+    be mapped directly into CPU system registers, reducing bus contention and improving access
+    determinism.
+\end{itemize}
+
+\subsection{Isolator API Overview}
+We implemented the Isolator runtime through two primary APIs:
+\begin{enumerate}
+    \item \texttt{int isolator\_start(unsigned affinity\_cpu);} \\
+    \textbf{Description:} Enables the isolator on a given CPU. \\
+    \textbf{Parameters:} \texttt{affinity\_cpu} specifies the isolated CPU. \\
+    \textbf{Return:} 0 on success; negative values indicate errors.
+    \item \texttt{int isolator\_rt\_irq\_pmd\_run(unsigned irqnum, unsigned long flags, void (*func)(void));} \\
+    \textbf{Description:} Starts a blocking, polling-style interrupt loop. \\
+    \textbf{Parameters:} \texttt{irqnum} is the interrupt number; \texttt{flags} indicate trigger
+    type (rising/falling edge, high/low level); \texttt{func} is the user-defined handler. \\
+    \textbf{Return:} 0 on success; negative values indicate errors.
+\end{enumerate}
+
+\subsection{Test Code Analysis}
+The \texttt{gpio\_test.c} module demonstrates usage:
+\begin{compactitem}
+    \item \textbf{Step 1:} Invoke \texttt{isolator\_start()} to enable isolation on the target CPU.
+    \item \textbf{Step 2:} Configure GPIO registers, including address mapping, multiplexing,
+    direction, and interrupt settings.
+    \item \textbf{Step 3:} Run the GPIO toggling function with \texttt{isolator\_rt\_irq\_pmd\_run()}.
+\end{compactitem}
+
+\textbf{GPIO Configuration.} The function \texttt{gpio\_config()} maps GPIO0, GPIO1, and PAD base
+addresses into kernel virtual space using \texttt{ioremap\_np}, configures multiplexing to GPIO
+mode, sets GPIO1\_12 as input and GPIO0\_0 as output, and enables GPIO1\_12 interrupts on rising
+edge. Returns 0 on success or \texttt{-ENOMEM} on failure.
+
+\textbf{GPIO Toggle.} The function \texttt{gpio\_toggle()} generates a short pulse on GPIO0\_0:
+temporarily disables GPIO1\_12 interrupt, drives GPIO0\_0 high, inserts a delay with NOPs,
+drives GPIO0\_0 low, then re-enables and clears GPIO1\_12 interrupt.
+
+\subsection{Experimental Results}
+In a 24-hour continuous test, the system achieved:
+\begin{itemize}
+    \item Maximum response latency: 500 ns
+    \item Minimum response latency: 410 ns
+    \item Jitter: 90 ns
+\end{itemize}
+Compared with earlier results, the latency slightly increased. This trade-off was intentional: the
+new test code prioritizes usability and flexibility, accepting minor degradation in raw real-time
+performance.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\columnwidth]{oscilloscope.png}
+    \caption{System architecture.}
+    \label{fig:oscilloscope}
+\end{figure}
 
 \section{Summary}
 Collectively, these kernel-level enhancements enable an isolation-aware runtime model optimized
