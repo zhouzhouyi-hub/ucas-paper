@@ -353,6 +353,55 @@ Eliminates background timer interrupts that may interfere with deterministic wor
 Facilitates fine-grained control over timekeeping from user space, which is critical in real-time
 systems.
 
+\subsection{Inter-Core Communication for the Isolated Core}
+
+In many real-time and safety-critical applications, the isolated core must exchange information
+with other cores to coordinate tasks, report status, or respond to external events. The ability
+to communicate efficiently between cores is therefore crucial for both system performance and reliability. 
+
+Currently, the communication between the isolated core and other cores is implemented using
+a shared memory mechanism. Shared memory provides a straightforward and low-overhead method for
+data exchange, allowing both the isolated core and the other cores to directly read from and
+write to common memory regions. Measurements indicate that the round-trip latency of this
+communication channel is approximately 300 ns, which is sufficiently low for many real-time control and monitoring applications.
+
+To ensure data consistency and prevent race conditions, synchronization mechanisms such as
+spinlocks, memory barriers, or atomic operations are employed. These mechanisms guarantee that
+concurrent accesses to shared memory do not lead to corruption or inconsistent data, which is
+particularly important in systems with strict timing and safety requirements.
+
+While the shared memory approach is simple and effective, it may face challenges under scenarios
+with high communication frequency or contention. Issues such as cache coherence overhead, access
+serialization, or increased latency under load can arise. To address these potential limitations,
+future improvements could include the use of lock-free data structures, dedicated communication
+buffers, or hardware-assisted messaging mechanisms. These enhancements could further reduce latency,
+increase throughput, and improve the predictability of inter-core communication.
+
+Overall, the current shared-memory solution provides a practical balance between implementation
+simplicity, low latency, and reliability, enabling efficient and deterministic communication
+between the isolated core and other cores in the system.
+
+\subsection{GPIO Polling-Based Interrupt Handling for the Isolated Core}
+
+In this approach, during the GPIO polling process, standard interrupt handling disabled to
+avoid unnecessary processor interruptions and reduce bus contention. Instead of relying on
+conventional interrupt signaling, the system reads the interrupt status registers to determine
+whether a GPIO event has been triggered. By directly querying the interrupt controller in this
+manner, the processor can detect changes in GPIO levels while minimizing overhead on the system bus.
+
+This method provides several advantages over traditional interrupt-driven mechanisms. First,
+by disabling interrupts during polling, unnecessary context switches and interrupt processing
+are avoided, which reduces overall system latency. Second, direct access to the interrupt status
+registers allows the processor to respond to GPIO events more quickly and predictably. As a result,
+this design achieves higher responsiveness and lower bus utilization, which is critical for
+real-time and safety-critical applications.
+
+Overall, the combination of GPIO polling with register-based event detection offers a practical
+and efficient solution. It balances the need for fast response with reduced system overhead,
+enabling the isolated core to handle GPIO-triggered events effectively while maintaining smooth
+communication and coordination with other cores.
+
+
 \section{Evaluation: Deterministic Execution with CPU Isolator}
 
 To further improve determinism, we adopt the idea of the "Gordian Knot" by employing a CPU
