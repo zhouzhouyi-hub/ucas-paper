@@ -26,7 +26,7 @@
 \setlength{\pdfpagewidth}{8.5in}
 \setlength{\pdfpageheight}{11in}
 \pdfinfo{
-/Title (Enhancing Linux Kernel Real-Time Performance through Centralized Timer Interrupt Handling)
+/Title (Towards Deterministic Sub-0.5 µs Response on Linux through Interrupt Isolation)
 /Author (Anonymous)}
 \setcounter{secnumdepth}{0}  
 
@@ -35,131 +35,170 @@
 % proceedings, working notes, and technical reports.  This file is made 
 % with minimal changes by explicit permission from AAAI.
 %
-\title{Enhancing Linux Kernel Real-Time Performance through Centralized Timer Interrupt Handling}
+\title{Towards Deterministic Sub-0.5 µs Response on Linux through Interrupt Isolation}
 \author{
 \begin{tabular}{lllll}
   Zhouyi Zhou & Zhili Liu & Shancong Zhang & Jiemin Li & Dengke Du \\
-  Mengke Sun  & Zhiqiang Wang & Hongyan Liu & Guoxin Xu & Yexin Han\\
-%  & Dengke Du & Mengke Sun  & Zhiqiang Wang & Hongyan Liu & Guoxin Xu & Yexin Han\\
+ %  & Dengke Du & Mengke Sun  & Zhiqiang Wang & Hongyan Liu & Guoxin Xu & Yexin Han\\
 \end{tabular}
 \\
-Beijing UCAS Space Technology Co Ltd, Beijing, China\\
+Beijing Ucas Technology Co,Ltd., Beijing, China\\
 \{zhouyi.zhou, zhili.liu, sam.zhang, jiemin.li,
-dengke.du, mengke.sun, zhiqiangwang, hongyan.liu,
-xuguokai, hanyexin\}@ucas.com.cn\\ 
+dengke.du\}@ucas.com.cn\\ 
 }
 
 \maketitle
 
 \begin{abstract}
-In real-time and high-performance computing environments, predictable CPU behavior and low-
-latency response are critical. The Linux kernel, by default, distributes periodic timer interrupts
-(ticks) across all CPU cores, issues inter-processor interrupts (IPIs) and scheduling disturbances
-that hinder deterministic performance. This paper investigates a method for improving Linux
-kernel real-time behavior by centralizing timer interrupt handling and inter-processor interrupts
-on periodically invoked function. We analyze the mechanism in detail, explain the interplay with
-RCU context-tracking, and demonstrate the practical benefits both in a GPIO toggling environment
-and a inter-processor communication environment. Our experiments show significant
-improvements in interrupt latency and scheduling predictability, enabling more efficient real-time
-and user-space networking applications. 
+Real-time responsiveness in Linux is often constrained by interrupt contention and timer
+handling overhead, making it challenging to achieve sub-microsecond latency.
+This work introduces an interrupt isolation approach that centralizes and minimizes timer
+interrupt interference across CPU cores. By redirecting periodic timer events to a
+dedicated core and suppressing redundant inter-processor interrupts, our design significantly
+reduces jitter and response latency. Experiments conducted on an ARM-based multicore
+platform demonstrate that the proposed mechanism consistently achieves sub-0.5 µs response
+times, outperforming conventional Linux PREEMPT-RT configurations. These results highlight
+the potential of interrupt isolation as a lightweight and effective strategy for
+deterministic real-time workloads in general-purpose operating systems.
 \end{abstract}
 
-
 \section{Introduction}
-Modern high-performance and real-time systems increasingly demand predictable CPU behavior,
-low interrupt latency, and minimal system noise. However, general-purpose operating systems
-like Linux are not originally designed with these strict requirements in mind. In particular, two key
-sources of execution disturbance are periodic timer interrupts and inter-processor interrupts (IPIs)
-— each of which independently contributes to unpredictability and jitter in CPU-bound workloads.
-Timer Interrupts: The Linux kernel schedules periodic timer interrupts (commonly known as ticks)
-on every CPU core to maintain kernel housekeeping, timekeeping, and scheduling. These
-interrupts invoke routines for updating system time, triggering task rescheduling, handling timer
-expiration, real time process bandwidth control, and advancing internal kernel mechanisms. For
-typical workloads, such periodic processing is harmless or even necessary. However, for latency-
-sensitive applications — such as user-space network packet processing, real-time control loops,
-or audio/video pipelines — these timer interrupts pose significant interference by breaking
-deterministic CPU execution.
 
+Modern high-performance and real-time systems increasingly demand 
+\textbf{predictable CPU behavior}, \textbf{ultra-low interrupt latency}, 
+and \textbf{minimal system noise}. 
+However, general-purpose operating systems such as Linux were not 
+originally designed to meet such stringent timing requirements. 
+As a result, applications with tight latency constraints often suffer from 
+\textbf{execution disturbances} caused primarily by two kernel-level 
+mechanisms: \emph{periodic timer interrupts} and 
+\emph{inter-processor interrupts (IPIs)}.  
 
-While mechanisms like NOHZ\_FULL aim to reduce the frequency of such timer ticks, they cannot
-completely eliminate them. Even in nohz\_full mode, the tick timer still fire periodically. Thus, strict
-real-time applications still face residual interruptions even on nominally “isolated” cores.
-Inter-Processor Interrupts (IPIs): In parallel with timer-related disturbances, IPIs represent another
-major source of noise. IPIs are used in the kernel to coordinate state changes between cores —
-for example, to trigger TLB shootdowns, wake remote tasks, or synchronize RCU grace periods.
-From the perspective of an application pinned to a specific core, IPIs are unpredictable and
-asynchronous, and can cause unwelcome preemption or context switches.
-Although disabling timer interrupts may reduce local noise, it does not automatically prevent a
-core from receiving IPIs initiated by other cores or subsystems. This means that even a core
-exempt from ticks may still be interrupted arbitrarily due to kernel-wide coordination
-mechanisms.
+\subsection{Timer Interrupts}
+In Linux, periodic timer interrupts (commonly referred to as \emph{ticks}) 
+are scheduled on every CPU core to maintain system time and perform 
+kernel housekeeping tasks. These interrupts invoke routines for 
+timekeeping, task scheduling, timer expiration, bandwidth enforcement 
+for real-time processes, and other internal kernel mechanisms. 
+While harmless---or even beneficial---for general workloads, 
+such periodic processing can be highly disruptive for 
+latency-sensitive applications such as user-space packet processing, 
+real-time control loops, and multimedia pipelines, where 
+\textbf{deterministic CPU execution} is critical.  
 
+Mechanisms such as \texttt{NOHZ\_FULL} attempt to mitigate this problem 
+by reducing tick frequency, but they cannot fully eliminate timer activity. 
+Even in \texttt{nohz\_full} mode, periodic ticks still occur, leaving 
+``isolated'' cores subject to residual interruptions.  
 
-Our Approach: Full Isolation by timer bypass and IPI suppression. In this paper, we present a novel
-and more aggressive approach to CPU isolation in Linux: We completely disable timer interrupt
-processing on selected cores, ensuring no kernel tick-related activity occurs locally; We suppress
-all non-essential inter-processor interrupts to those cores, using targeted kernel patches and
-configuration to redirect such coordination elsewhere or delay it entirely. This level of isolation is
-not achievable with existing mechanisms like NOHZ\_FULL or isolcpus alone. Our solution explicitly
-separates time-related kernel responsibilities and reassigns them to maintenance mechanism,
-which periodically execute the timer functionalities required for global correctness. Meanwhile,
-isolated cores run continuously without being interrupted by either local timers or remote IPIs.
-This approach is particularly effective in scenarios like GPIO toggling, where high precision and
-low-latency response are critical, allowing the Linux isolation kernel to efficiently manage interrupts,
-isolate processing on specific cores, and ensure that GPIO outputs are triggered in a timely manner,
-free from interrupt interference or other system task disruptions.
+\subsection{Inter-Processor Interrupts (IPIs)}
+In addition to timer ticks, IPIs represent another significant source of 
+jitter. Within the Linux kernel, IPIs are widely used to coordinate state 
+changes across cores---for example, to initiate TLB shootdowns, 
+wake remote tasks, or synchronize RCU grace periods. 
+From the perspective of an application pinned to a dedicated core, 
+IPIs are asynchronous and unpredictable, often leading to unwanted 
+preemptions or context switches.  
 
+Disabling local timer interrupts reduces some noise but does not prevent 
+a core from receiving IPIs initiated elsewhere in the system. 
+Consequently, even cores exempt from ticks may still face arbitrary 
+interruptions caused by global kernel coordination mechanisms.  
 
-\section{Related Work}\label{BG} 
+\subsection{Motivation}
+These limitations highlight a fundamental challenge: 
+\textbf{conventional mechanisms are insufficient for achieving 
+sub-microsecond, deterministic response times in Linux}. 
+To address this, we propose an \textbf{interrupt isolation framework} 
+that centralizes timer interrupt handling and suppresses unnecessary IPIs, 
+thereby enabling Linux systems to deliver 
+\textbf{sub-0.5~$\mu$s response times} for real-time workloads.  
+
+\subsection{Our Approach: Full Isolation via Centralized Timer Handling and Shared-Memory IPI Management}
+
+In this paper, we present a novel and more aggressive approach to CPU isolation in Linux, 
+designed to achieve deterministic sub-microsecond response times. 
+Our mechanism introduces two key innovations:
+
+\begin{itemize}
+    \item \textbf{Centralized Timer Handling:} Timer interrupt processing is completely disabled on selected cores. 
+    All kernel tick-related activities are redirected to a dedicated maintenance core, 
+    which periodically executes the timer functionalities required for global correctness. 
+    This ensures that isolated cores run without local timer interruptions.
+    
+    \item \textbf{Shared-Memory IPI Management:} Non-essential inter-processor interrupts (IPIs) to isolated cores 
+    are suppressed. Coordination that would normally trigger IPIs is instead implemented via shared memory, 
+    allowing controlled and predictable communication without asynchronous preemption.
+\end{itemize}
+
+This level of isolation is not achievable with existing mechanisms such as 
+\texttt{NOHZ\_FULL} or \texttt{isolcpus} alone. 
+By explicitly separating time-related kernel responsibilities and reassigning them to a dedicated core, 
+and by handling inter-core coordination through shared memory rather than IPIs, 
+isolated cores execute continuously without interruption.  
+
+The proposed approach is particularly effective in latency-critical scenarios, 
+such as GPIO toggling, real-time control loops, and user-space packet processing. 
+It allows the Linux kernel to efficiently manage global interrupts, 
+isolate real-time workloads on dedicated cores, and guarantee timely execution 
+of high-precision tasks free from interference by timer events or other system operations.
+
+\section{Related Work}\label{BG}
 \subsection{Timer Interrupt Control in the Linux Kernel}
-The timer ticker design for Operating Systems has long exist before Linux kernel was
-developed\cite{Corbet}.
-The Linux kernel schedules periodic timer interrupts (ticks) on each CPU core for timekeeping,
-process accounting, and scheduler activation. These interrupts are typically generated at (250 - 1K) Hz
-and cause the kernel to preempt running tasks for internal maintenance.
-To reduce this overhead, tickless systems were introduced. The NO\_HZ feature disables timer
-interrupts on idle CPUs, and its extension, NOHZ\_FULL, attempts to eliminate ticks even during
-user-space execution\cite{KernelDocNOHZ}. However, timer ticks still occur on NO\_HZ/NOHZ\_FULL CPUs because the
-kernel want to do statistics works\cite{stackoverflow}.
-These mechanisms help reduce timer-induced jitter but do not eliminate all sources of latency.
+
+The concept of timer tickers in operating systems predates the development of the Linux kernel \cite{Corbet}. 
+In Linux, periodic timer interrupts, commonly referred to as \emph{ticks}, are scheduled on each CPU core 
+to support timekeeping, process accounting, and scheduler activation. These interrupts typically occur at 
+frequencies between 250 Hz and 1 kHz and may preempt running tasks to perform kernel maintenance.  
+
+To reduce the overhead caused by frequent ticks, \emph{tickless} systems were introduced. 
+The \texttt{NO\_HZ} feature disables timer interrupts on idle CPUs, and its extension, 
+\texttt{NOHZ\_FULL}, attempts to eliminate ticks even during active user-space execution \cite{KernelDocNOHZ}. 
+However, timer ticks still occur on \texttt{NO\_HZ}/\texttt{NOHZ\_FULL} CPUs because the kernel must perform 
+statistics collection and other internal bookkeeping \cite{stackoverflow}.  
+
+While these mechanisms help reduce timer-induced jitter, they do not completely eliminate all sources of latency, 
+leaving real-time workloads exposed to residual interruptions.
+
 
 \subsection{Inter-Processor Interrupts (IPIs) and Their Effects}
-Inter-process interrupts (IPIs) in Linux can impact real-time performance by introducing
-unpredictable latency, as they force a CPU to handle interrupts from another processor,
-potentially preempting time-critical tasks. In real-time systems, where deterministic scheduling
-and minimal latency are crucial, IPIs—used for tasks like TLB flushes, cache management, or
-scheduler balancing—can cause delays if they trigger during high-priority real-time execution.
-Unlike timer interrupts, IPIs are externally triggered and often asynchronous. This means that even
-tickless CPUs may receive unexpected IPIs, introducing nondeterministic latency and cache
-disruptions. Existing work recognizes this as a major obstacle to achieving strict real-time
-performance in Linux \cite{YuxinRen}.
 
+Inter-processor interrupts (IPIs) in Linux can significantly impact real-time performance by introducing 
+unpredictable latency. IPIs force a CPU to handle interrupts originating from another processor, 
+potentially preempting time-critical tasks. In real-time systems, where deterministic scheduling and 
+minimal latency are essential, IPIs—used for operations such as TLB flushes, cache management, 
+and scheduler balancing—can cause delays if triggered during the execution of high-priority tasks. 
+Unlike timer interrupts, IPIs are externally triggered and often asynchronous. Consequently, even 
+tickless CPUs may receive unexpected IPIs, introducing nondeterministic latency and potential cache 
+disruptions. Existing research has identified IPIs as a major obstacle to achieving strict real-time 
+performance on Linux \cite{YuxinRen}.  
 
-To mitigate the impact of inter-processor interrupts (IPIs) on real-time performance, we must
-systematically identify and address each IPI source individually. For instance, unloading block
-devices in Linux will trigger IPI, we avoid dynamically unloading them in real-time critical
-environments. Similarly, since CPU frequency statistics require a IPI to get frequency from another
-CPU, we disable frequency scaling or use a fixed frequency mode to eliminate such overhead. By
-analyzing and selectively disabling IPI-inducing operations—such as TLB shootdowns, RCU
-callbacks, or scheduler balancing—we eliminate all the unnecessary cross-core interruptions,
-ensuring deterministic latency for real-time tasks. This targeted approach, combined with CPU
-isolation and IRQ affinity tuning, helps maintain hard real-time guarantees in Linux systems.
+To mitigate the impact of IPIs on real-time workloads, it is necessary to systematically identify and 
+address each source of cross-core interrupts. For example, unloading block devices in Linux triggers 
+IPIs, so such operations should be avoided in latency-critical environments. Similarly, CPU frequency 
+statistics require IPIs to query other cores; disabling dynamic frequency scaling or using a fixed-frequency 
+mode eliminates this source of latency. By analyzing and selectively suppressing IPI-inducing operations—such as 
+TLB shootdowns, RCU callbacks, and scheduler balancing—we can remove unnecessary cross-core interruptions, 
+ensuring deterministic execution for real-time tasks. Combined with CPU isolation and IRQ affinity tuning, 
+this targeted approach helps maintain hard real-time guarantees on Linux systems.
+
 
 
 \subsection{CPU Isolation Techniques}
-The Linux isolcpus and irqaffinity \cite{KernelDocParam} allow a processor core to be isolated from the general
-scheduler and external interrupts, effectively preventing it from handling most kernel tasks and
-services such as RCU callbacks. However, these mechanisms do not prevent all types of
-interruptions. Specifically, they cannot disable timer interrupts or inter-processor interrupts (IPIs),
-which may still be delivered to the isolated core. As a result, while these tools can reduce
-interference from the operating system, they do not achieve complete isolation at the hardware
-interrupt level.
 
+Linux provides mechanisms such as \texttt{isolcpus} and IRQ affinity \cite{KernelDocParam} 
+to isolate processor cores from the general scheduler and external interrupts. 
+These tools can effectively prevent a core from executing most kernel tasks and services, 
+including RCU callbacks. However, they do not block all types of interruptions. 
+In particular, timer interrupts and inter-processor interrupts (IPIs) may still be delivered 
+to an isolated core. Consequently, while \texttt{isolcpus} and IRQ affinity reduce interference 
+from the operating system, they do not achieve complete isolation at the hardware interrupt level.  
 
-The Redhawk Linux RTOS\cite{redhawk} eliminates the impact of clock interrupts on the OS through its unique
-technologies. By modifying mechanisms such as , it significantly reduces the influence of inter-core
-interrupts on system performance. However, the system does not completely eliminate inter-core
-interrupts on isolated cores; instead, it allows them to occur conditionally.
+Redhawk Linux RTOS \cite{redhawk} further minimizes the impact of clock interrupts on real-time workloads 
+through specialized kernel modifications. These mechanisms significantly reduce the influence 
+of inter-core interrupts on system performance. Nonetheless, Redhawk does not entirely eliminate 
+inter-core interrupts on isolated cores; instead, they may still occur conditionally under certain scenarios.
+
 
 \section{Methodology}\label{BE}
 
