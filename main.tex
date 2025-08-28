@@ -18,6 +18,15 @@
 \usepackage{paralist}
 \usepackage{colortbl}
 \usepackage{dingbat, pifont}
+\usepackage{listings}
+\usepackage[T1]{fontenc}
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  breaklines=true,
+  frame=single,
+  captionpos=b
+}
 \definecolor{Gray}{gray}{0.9}
 
 \usepackage{array} %for table fix width
@@ -288,9 +297,7 @@ This section presents a detailed overview of the kernel-level modifications we i
 support high-determinism, low-jitter execution on isolated CPUs for high-performance, real-time
 packet processing. These modifications are implemented within four critical subsystems of the
 Linux kernel: RCU (Read-Copy-Update), the Real-Time Scheduler, SMP/IPI handling, and Timer Tick
-Management. In addition, we introduce a lightweight per-CPU isolation tracking mechanism that
-guides these subsystems to adapt their behavior dynamically based on the isolation state of each
-core.
+Management. 
 
 \subsection{Kernel Modifications Overview}
 To enable CPU isolation at a fine granularity and ensure minimal OS interference on application-
@@ -298,16 +305,16 @@ dedicated cores, we performed targeted changes across the kernel. The key goals 
 Eliminate unnecessary kernel activity on isolated CPUs,
 Avoid inter-processor communication (e.g., IPIs) to reduce latency spikes,
 Defer time-based maintenance (e.g., scheduling enforcement) to application-controlled contexts,
-Maintain correctness of core kernel mechanisms while enabling custom runtime models.
 To coordinate the behavior of different kernel components, we define the following per-CPU data
 structure:
-\begin{verbatim}
+
+\begin{lstlisting}[language=C, caption={Per-CPU isolator counter definition}]
 DEFINE_PER_CPU(atomic_t,
-  isolator_counters[CONFIG_NR_CPUS]);
-\end{verbatim}
+    isolator_counters[CONFIG_NR_CPUS]);
+\end{lstlisting}
 Each entry in this array acts as a flag indicating whether the corresponding CPU is currently under
 isolation. This flag is incremented by user-space applications via a custom system call or API
-(isolator\_ticker()) and is read by kernel components to selectively disable or defer their operations.
+(isolator\_start()) and is read by kernel components to selectively disable or defer their operations.
 
 
 \subsection{RCU Grace Period Handling}
@@ -320,53 +327,116 @@ normal kernel activity.
 Such treatment is especially crucial in real-time and low-latency systems where isolated CPUs are
 fully dedicated to user-level workloads and should not incur involuntary kernel participation.
 We add following following condition to kernel function rcu\_implicit\_dynticks\_qs:
-\begin{verbatim}
-if (isolator_counters[rdp->cpu].counter){
-  return 1; // Force quiescent state
+\begin{lstlisting}[language=C, caption={Forcing quiescent state if isolator counter is active}]
+if (isolator_counters[rdp->cpu].counter) {
+    return 1; // Force quiescent state
 }
-\end{verbatim}
-Technical Implications:
-Prevents false-positive RCU stall warnings,
-maintains system-wide RCU progress without interference from isolated cores,
-Ensures correctness without compromising latency isolation.
+\end{lstlisting}
+Another important technical detail is that we explicitly prevent the \texttt{rcu\_preempt} kernel 
+thread from running on isolated CPUs. During our experiments, we observed that the scheduler 
+occasionally places the \texttt{rcu\_preempt} kernel thread on an isolated core. Since these cores 
+are typically occupied by uninterrupted, high-priority user tasks, the \texttt{rcu\_preempt} 
+thread may not get scheduled in a timely manner. This situation blocks the progress of RCU grace 
+periods, preventing \texttt{synchronize\_rcu} from returning, which in turn causes other processes 
+invoking \texttt{synchronize\_rcu} to remain blocked. By disallowing \texttt{rcu\_preempt} on 
+isolated CPUs, we avoid this pathological scenario and preserve the expected non-blocking behavior 
+of RCU for the rest of the system.  
 
-\subsection{Real-Time Scheduler Deferral}
-The changes to the real-time scheduler timer logic allow the suppression of periodic enforcement
-checks on isolated CPUs. Instead of allowing kernel timers to preempt execution at arbitrary
-intervals, bandwidth enforcement is deferred and delegated to a new handler (), which can be
-invoked explicitly by user-space code.
-This redesign ensures that real-time constraints are still respected, albeit under application
-supervision, thus balancing temporal determinism with system integrity.
-We modify the core real-time scheduler timer routine (sched\_rt\_period\_timer) as follows:
-\begin{verbatim}
-if (__this_cpu_read(ticker_counter) != 0) {
-  __this_cpu_write(ticker_rb, rt_b); 
-  __this_cpu_write(ticker_rt_period,
-    rt_b->rt_period);
-  return HRTIMER_NORESTART;
+\subsection{Time Scheduler Deferral}
+\paragraph{Tick Subsystem Modifications.}
+The Linux \texttt{tick-sched.c} subsystem manages periodic scheduling ticks and 
+nohz (tickless) operation. By default, each CPU receives periodic tick events 
+driven by high-resolution timers, which are used to drive process accounting, 
+timekeeping, and load balancing. However, on isolated CPUs dedicated to 
+real-time packet processing, these periodic ticks represent an unnecessary 
+source of nondeterministic interruptions.
+
+To address this, we introduced a per-CPU flag (\texttt{ucas\_counter}) that 
+controls whether tick-related hrtimers should be restarted or suppressed. When 
+this counter is non-zero, functions such as \texttt{tick\_nohz\_restart()}, 
+\texttt{tick\_nohz\_idle\_restart\_tick()}, \texttt{tick\_nohz\_handler()}, 
+and \texttt{tick\_sched\_timer()} are modified to immediately return without 
+restarting the periodic scheduler timer. This effectively disables the 
+recurring tick on isolated CPUs, preventing spurious wakeups and involuntary 
+kernel execution.
+
+In order to preserve correctness, we provide helper routines that allow the 
+isolator subsystem to explicitly handle deferred tick events when needed. For 
+example, the function \texttt{ucas\_handle\_tick\_sched\_timer()} invokes 
+\texttt{tick\_sched\_do\_timer()} and \texttt{update\_process\_times()} 
+manually, ensuring that accounting and timekeeping can still progress under 
+controlled conditions.
+
+We also provide utility functions such as 
+\texttt{ucas\_stop\_sched\_timer()} to explicitly cancel tick timers when 
+isolation is active. 
+\begin{lstlisting}[language=C, caption={Stop per-CPU scheduler timer}]
+void ucas_stop_sched_timer(void)
+{
+    struct tick_sched *ts = this_cpu_ptr(&tick_cpu_sched);
+    hrtimer_cancel(&ts->sched_timer);
 }
-\end{verbatim}
-This suppresses the default timer behavior when the CPU is isolated.
-We also introduce a new explicit handler, which can be invoked periodically:
-\begin{verbatim}
-void ticker_handle_sched_rt_timer() {
-  struct rt_bandwidth *rt_b =
-         __this_cpu_read(ticker_rb);
-  if (rt_b &&
-         time_elapsed_since_last_check())
-  {
-    unsigned int overrun
-             = calculate_overrun(rt_b);
-    do_sched_rt_period_timer(rt_b, overrun);
-    __this_cpu_write(ticker_jiffies_rt,
-                            jiffies);
-  }
+\end{lstlisting}
+
+This design guarantees that isolated CPUs are free from involuntary tick 
+interrupts during real-time workloads, while still allowing deferred handling 
+of system housekeeping activities when explicitly triggered. The result is a 
+significant reduction in jitter and improved determinism for 
+latency-sensitive applications.
+
+\paragraph{Real-Time Bandwidth Deferral.}
+In addition to suppressing periodic tick timers, we extended the real-time (RT) 
+scheduler’s bandwidth control logic in \texttt{kernel/sched/rt.c}. In the 
+unmodified kernel, each CPU uses a periodic high-resolution timer 
+(\texttt{rt\_period\_timer}) to enforce CPU runtime quotas for SCHED\_RT tasks. 
+While this mechanism ensures fairness and prevents runaway RT tasks, it also 
+introduces recurring interrupts that can preempt high-priority user-level 
+workloads running on isolated CPUs.
+
+To eliminate this source of interference, we introduce a deferral mechanism 
+based on a per-CPU counter (\texttt{ucas\_counter}). When this counter is 
+non-zero, the function \texttt{sched\_rt\_period\_timer()} detects the 
+condition and suppresses execution of the periodic quota enforcement logic. 
+Instead, the scheduler records the affected \texttt{rt\_bandwidth} instance in 
+per-CPU state (\texttt{ucas\_rb}, \texttt{ucas\_rt\_period}, and 
+\texttt{ucas\_jiffies\_rt}), and defers processing until explicitly invoked by 
+the isolator through \texttt{ucas\_handle\_sched\_rt\_timer()}. This handler 
+later computes the overrun and applies bandwidth enforcement in a controlled 
+manner, ensuring correctness while avoiding involuntary interrupts.
+
+We also provide utility functions such as 
+\texttt{ucas\_purge\_this\_cpu\_rtb()} to explicitly cancel real-time bandwidth timers when 
+isolation is active. We augmented the \texttt{rt\_bandwidth} 
+structure with a list node and a \texttt{deleted} flag. Each CPU maintains a 
+per-CPU list of active bandwidth structures, \texttt{ucas\_purge\_this\_cpu\_rtb()} cancel
+the timers on above per-CPU list one by one.
+
+
+\begin{lstlisting}[language=C, caption={Per-CPU RT bandwidth purge for isolator}]
+void ucas_purge_this_cpu_rtb(void)
+{
+    struct list_head local;
+    struct rt_bandwidth *rt_b, *tmp;
+
+    INIT_LIST_HEAD(&local);
+    list_splice_init(this_cpu_rt_bw_list(), &local);
+
+    list_for_each_entry_safe(rt_b, tmp, &local, node) {
+        list_del_init(&rt_b->node);
+        rt_b->deleted = 1;
+        hrtimer_cancel(&rt_b->rt_period_timer);
+    }
 }
-\end{verbatim}
-Technical Implications
-Minimizes involuntary kernel preemption on isolated CPUs,
-Preserves schedulability enforcement via cooperative, user-controlled mechanisms,
-Reduces high-resolution timer overhead in performance-critical execution paths.
+\end{lstlisting}
+
+
+
+\paragraph{Summary.}
+Together, the suppression of periodic tick timers and the deferral of real-time 
+bandwidth enforcement create an execution environment where isolated CPUs are 
+shielded from involuntary kernel activities. Tick-related housekeeping and 
+scheduler quota enforcement are both deferred until explicitly invoked, ensuring 
+that high-priority user workloads can proceed with minimal interference. 
 
 \subsection{IPI Suppression}
 The suppression of inter-processor interrupts (IPIs) to isolated CPUs eliminates one of the major
