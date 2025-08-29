@@ -473,19 +473,23 @@ Currently, the communication between the isolated core and other cores is implem
 a shared memory mechanism. Shared memory provides a straightforward and low-overhead method for
 data exchange, allowing both the isolated core and the other cores to directly read from and
 write to common memory regions. Measurements indicate that the round-trip latency of this
-communication channel is approximately 300 ns, which is sufficiently low for many real-time control and monitoring applications.
+communication channel is approximately 300 ns, which is sufficiently low for many real-time
+control and monitoring applications (In our evaluation on the Phytium platform---1000 loops,
+each with 409{,}600 round trips---the shared memory communication channel achieved a latency
+between 200\,ns and 300\,ns).
+ 
 
 To ensure data consistency and prevent race conditions, synchronization mechanisms such as
-spinlocks, memory barriers, or atomic operations are employed. These mechanisms guarantee that
+memory barriers, or atomic operations are employed. These mechanisms guarantee that
 concurrent accesses to shared memory do not lead to corruption or inconsistent data, which is
 particularly important in systems with strict timing and safety requirements.
 
 While the shared memory approach is simple and effective, it may face challenges under scenarios
 with high communication frequency or contention. Issues such as cache coherence overhead, access
 serialization, or increased latency under load can arise. To address these potential limitations,
-future improvements could include the use of lock-free data structures, dedicated communication
-buffers, or hardware-assisted messaging mechanisms. These enhancements could further reduce latency,
-increase throughput, and improve the predictability of inter-core communication.
+future improvements could include the use of hardware-assisted messaging mechanisms.
+These enhancements could further reduce latency, increase throughput, and improve the predictability
+of inter-core communication.
 
 Overall, the current shared-memory solution provides a practical balance between implementation
 simplicity, low latency, and reliability, enabling efficient and deterministic communication
