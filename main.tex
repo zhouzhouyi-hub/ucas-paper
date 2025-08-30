@@ -20,6 +20,7 @@
 \usepackage{dingbat, pifont}
 \usepackage{listings}
 \usepackage[T1]{fontenc}
+
 \lstset{
   basicstyle=\ttfamily\small,
   columns=fullflexible,
@@ -518,91 +519,97 @@ communication and coordination with other cores.
 
 \section{Evaluation: Deterministic Execution with CPU Isolator}
 
-To further improve determinism, we adopt the idea of the "Gordian Knot" by employing a CPU
-Isolator technique. This approach allows a dedicated CPU core to behave like a bare-metal
-environment, running only one process with no context switching.
-
-\subsection{Isolation Strategy}
-The core mechanisms are illustrated in Figure~\ref{fig:architecture} and correspond to specific
-sources of disturbance reduction:
-\begin{enumerate}
-    \item \textbf{CPU Isolation:} Using the \texttt{isolcpus} parameter, a core is isolated from the
-    general scheduler so that it does not run user-space processes.
-    \item \textbf{Highest-Priority FIFO Process:} The target process is pinned to the isolated core,
-    assigned real-time priority 99, and run without RT throttling, thereby monopolizing the CPU.
-    \item \textbf{Interrupt Affinity:} With \texttt{irqaffinity}, device interrupts are routed to other cores,
-    ensuring the isolated core is free from external interrupt interference.
-    \item \textbf{System Interrupt Suppression:} Through kernel modifications, clock interrupts,
-    inter-processor interrupts (IPIs), and similar disturbances are blocked, detaching the isolated
-    core entirely from Linux scheduling.
-\end{enumerate}
-On such an isolated core, the program executes continuously without interruption, achieving
-near-bare-metal behavior.
-
-\subsection{Further Real-Time Optimizations}
-While CPU isolation eliminates context switching overhead, additional sources of non-determinism
-remain, such as memory, I/O, and bus contention. To minimize these:
+The experimental setup consists of the following equipment:  
 \begin{itemize}
-    \item \textbf{Avoid Cache Misses:} Critical code can be written in assembly, using only registers
-    to avoid memory accesses.
-    \item \textbf{Optimized I/O Access:} By mapping I/O regions with \texttt{ioremap\_np} and setting
-    them as \texttt{MT\_DEVICE\_nGnRnE}, caching and prefetching effects are eliminated.
-    \item \textbf{Interrupt Polling Mechanism:} Instead of relying on interrupts, the system actively
-    polls interrupt status registers, achieving faster response than traditional interrupt handling.
-    \item \textbf{System Register Utilization:} On GICv3 platforms, interrupt control registers can
-    be mapped directly into CPU system registers, reducing bus contention and improving access
-    determinism.
+  \item Signal Generator: UNI-T  
+  \item Oscilloscope: Siglent SDS2074X Plus  
+  \item Development Board: Phytium Pi E2000Q V2  
+  \item Jumper Wires  
 \end{itemize}
 
-\subsection{Isolator API Overview}
-We implemented the Isolator runtime through two primary APIs:
-\begin{enumerate}
-    \item \texttt{int isolator\_start(unsigned affinity\_cpu);} \\
-    \textbf{Description:} Enables the isolator on a given CPU. \\
-    \textbf{Parameters:} \texttt{affinity\_cpu} specifies the isolated CPU. \\
-    \textbf{Return:} 0 on success; negative values indicate errors.
-    \item \texttt{int isolator\_rt\_irq\_pmd\_run(unsigned irqnum, unsigned long flags, void (*func)(void));} \\
-    \textbf{Description:} Starts a blocking, polling-style interrupt loop. \\
-    \textbf{Parameters:} \texttt{irqnum} is the interrupt number; \texttt{flags} indicate trigger
-    type (rising/falling edge, high/low level); \texttt{func} is the user-defined handler. \\
-    \textbf{Return:} 0 on success; negative values indicate errors.
-\end{enumerate}
+The signal generator drives a GPIO input connected simultaneously to both the Phytium Pi development board and the oscilloscope. The development board, upon detecting the input trigger, produces an output GPIO signal, which is also monitored by the oscilloscope Figure~\ref{fig:oscilloscope}.  
 
-\subsection{Test Code Analysis}
-The \texttt{gpio\_test.c} module demonstrates usage:
-\begin{compactitem}
-    \item \textbf{Step 1:} Invoke \texttt{isolator\_start()} to enable isolation on the target CPU.
-    \item \textbf{Step 2:} Configure GPIO registers, including address mapping, multiplexing,
-    direction, and interrupt settings.
-    \item \textbf{Step 3:} Run the GPIO toggling function with \texttt{isolator\_rt\_irq\_pmd\_run()}.
-\end{compactitem}
+To evaluate determinism, the oscilloscope’s persistence mode is enabled to visualize potential variations in the output signal. The input signal frequency is set to 200~kHz with a voltage range of 0--3.3~V. In order to better capture timing details, the oscilloscope time base is reduced from 2~µs/div to 100~ns/div, thereby improving horizontal resolution. The persistence overlay allows us to observe long-term stability and quantify jitter.
 
-\textbf{GPIO Configuration.} The function \texttt{gpio\_config()} maps GPIO0, GPIO1, and PAD base
-addresses into kernel virtual space using \texttt{ioremap\_np}, configures multiplexing to GPIO
-mode, sets GPIO1\_12 as input and GPIO0\_0 as output, and enables GPIO1\_12 interrupts on rising
-edge. Returns 0 on success or \texttt{-ENOMEM} on failure.
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\columnwidth]{evaluation.jpg}
+    \caption{System architecture.}
+    \label{fig:oscilloscope}
+\end{figure}
 
-\textbf{GPIO Toggle.} The function \texttt{gpio\_toggle()} generates a short pulse on GPIO0\_0:
-temporarily disables GPIO1\_12 interrupt, drives GPIO0\_0 high, inserts a delay with NOPs,
-drives GPIO0\_0 low, then re-enables and clears GPIO1\_12 interrupt.
+
+\textbf{Screenshot Analysis:}  
+Waveform screenshots are provided, with markers indicating the shortest and longest response times of the output signal relative to the input trigger. The jitter is calculated as the difference between the maximum and minimum response times:  
+
+\[
+Jitter = T\_{max} - T\_{min}
+\]
+
+
+Here, the left edge of the persistence trace corresponds to the shortest response, while the right edge corresponds to the longest response.  
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{oscilloscope.png}
+  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (isolator)}
+  \label{fig:jitter_waveform}
+\end{figure}
 
 \subsection{Experimental Results}
-In a 24-hour continuous test, the system achieved:
+In a 24-hour continuous test, the system with isolator technology achieved, as show in Figure~\ref{fig:jitter_waveform}:
 \begin{itemize}
     \item Maximum response latency: 500 ns
     \item Minimum response latency: 410 ns
     \item Jitter: 90 ns
 \end{itemize}
-Compared with earlier results, the latency slightly increased. This trade-off was intentional: the
-new test code prioritizes usability and flexibility, accepting minor degradation in raw real-time
-performance.
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.85\columnwidth]{oscilloscope.png}
-    \caption{System architecture.}
-    \label{fig:oscilloscope}
+
+By contrast, in a 24-hour continuous test,  PREEMPT-RT Linux system can only achieve maximum response latency:
+110us.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{oscilloscope2.png}
+  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (PREEMPT-RT Linux)}
+  \label{fig:jitter_waveform1}
 \end{figure}
+
+
+In addition to the external signal generator driven experiment, we implemented a counter-based GPIO toggling program. In this setup, the output signal is generated periodically by continuously reading the CPU timestamp counter (\texttt{CNTVCT\_EL0}) and flipping the GPIO at predefined intervals, eliminating the need for an external signal source.
+
+The long-term experiment was conducted for 24 hours under both CPU-isolated and non-isolated environments. The results are summarized in Table~\ref{tab:counter_toggle}, showing that the isolator achieves sub-microsecond determinism, while non-isolated real-time Linux suffers from significantly larger latency
+as shown in Figure~\ref{fig:jitter_waveform3} and Figure~\ref{fig:jitter_waveform4} .
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{oscilloscope3.png}
+  \caption{Oscilloscope maximum deviation (isolator)}
+  \label{fig:jitter_waveform3}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{oscilloscope4.png}
+  \caption{Oscilloscope maximum deviation (PREEMPT-RT Linux)}
+  \label{fig:jitter_waveform4}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\caption{Counter-based GPIO toggling experiment results over 24 hours}
+\label{tab:counter_toggle}
+\begin{tabular}{lccc}
+\hline
+\textbf{Configuration} & \textbf{Period} & \textbf{Maximum Latency} & \textbf{Duration} \\
+\hline
+With Isolator & 800~ns & 60~ns & 24~h \\
+Without Isolator & 200~\(\mu\)s & 680~\(\mu\)s & 24~h \\
+\hline
+\end{tabular}
+\end{table}
+
+The experiments demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (90 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency (up to 110 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
 
 \section{Summary}
 Collectively, these kernel-level enhancements enable an isolation-aware runtime model optimized
