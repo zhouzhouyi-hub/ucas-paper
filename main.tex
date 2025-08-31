@@ -612,22 +612,26 @@ Without Isolator & 200~\(\mu\)s & 680~\(\mu\)s & 24~h \\
 The experiments demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (90 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency (up to 110 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
 
 \section{Summary}
-Collectively, these kernel-level enhancements enable an isolation-aware runtime model optimized
-for deterministic, high-performance execution. Each subsystem is modified in a manner that
-preserves overall system correctness while respecting the isolation constraints imposed on
-specific CPUs. The design offers both temporal isolation and operational autonomy for real-time
-workloads, making it highly suitable for use cases such as packet processing, edge computing, and
-embedded systems.
-It is also important to note that the maintenance-related ticker handlers introduced in our design
-(e.g., and ) are optional in practice. In scenarios where the application cannot afford periodic
-interruption for such maintenance tasks, these handlers may be deliberately omitted. The primary
-consequence of this omission is that certain kernel statistics—such as process time accounting—
-will not be accurately recorded or reported. However, in many mission-critical or latency-sensitive
-applications, such statistical data is not essential. Similarly, the periodic handling of inter-processor
-interrupt (IPI) functionality can also be safely disabled under specific conditions. For example, if
-the application running on an isolated core does not access memory regions mapped via , then the
-corresponding IPI-based TLB shootdown mechanism may be skipped without compromising
-correctness.
+This paper introduced a kernel-level isolation framework that enables deterministic sub-microsecond
+execution on Linux by eliminating involuntary interruptions on dedicated cores. The proposed design
+suppresses periodic tick timers, defers real-time bandwidth enforcement, and replaces asynchronous
+inter-processor interrupts with shared-memory coordination. Through the Isolator API, applications
+retain explicit control over when and how deferred maintenance tasks are executed, preserving both
+determinism and system correctness.  
+
+Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under
+isolator-enabled operation, GPIO response latencies consistently remain below 500~ns with jitter as
+low as 90~ns, compared to up to 110~µs latency observed on PREEMPT-RT Linux. A long-term
+counter-based GPIO toggling experiment further validated that the isolator achieves stable,
+sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency
+fluctuations in the hundreds of microseconds.  
+
+Together, these results highlight that interrupt isolation and cooperative tick management provide a
+lightweight yet powerful strategy for achieving predictable performance on general-purpose
+operating systems. The framework enables strong temporal isolation and low-jitter execution,
+making it well suited for latency-critical scenarios such as packet processing, edge computing, and
+real-time control in embedded systems.
+
 \newpage
 % \printbibliography 
 \bibliographystyle{flairs} 
