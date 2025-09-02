@@ -20,7 +20,8 @@
 \usepackage{dingbat, pifont}
 \usepackage{listings}
 \usepackage[T1]{fontenc}
-
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, shapes, positioning, calc}
 \lstset{
   basicstyle=\ttfamily\small,
   columns=fullflexible,
@@ -47,14 +48,14 @@
 %
 \title{Towards Deterministic Sub-0.5 µs Response on Linux through Interrupt Isolation}
 \author{
-\begin{tabular}{lllll}
-  Zhouyi Zhou & Zhili Liu & Shancong Zhang & Jiemin Li & Dengke Du \\
+\begin{tabular}{llllll}
+  Zhouyi Zhou & Zhili Liu & Shancong Zhang & Jiemin Li & Dengke Du & Mengke Sun \\
  %  & Dengke Du & Mengke Sun  & Zhiqiang Wang & Hongyan Liu & Guoxin Xu & Yexin Han\\
 \end{tabular}
 \\
 Beijing Ucas Technology Co,Ltd., Beijing, China\\
 \{zhouyi.zhou, zhili.liu, sam.zhang, jiemin.li,
-dengke.du\}@ucas.com.cn\\ 
+dengke.du, mengke.sun\}@ucas.com.cn\\ 
 }
 
 \maketitle
@@ -327,12 +328,40 @@ normal kernel activity.
 
 Such treatment is especially crucial in real-time and low-latency systems where isolated CPUs are
 fully dedicated to user-level workloads and should not incur involuntary kernel participation.
-We add following following condition to kernel function rcu\_implicit\_dynticks\_qs:
-\begin{lstlisting}[language=C, caption={Forcing quiescent state if isolator counter is active}]
-if (isolator_counters[rdp->cpu].counter) {
-    return 1; // Force quiescent state
+We add following following condition to RCU kernel functions:
+
+
+\begin{figure}[h]
+\centering
+\resizebox{0.45\textwidth}{!}{%
+\begin{tikzpicture}[node distance=1.4cm, auto]
+  % Styles
+  \tikzstyle{block} = [rectangle, draw, rounded corners,
+                       minimum width=3cm, minimum height=0.9cm, align=center]
+  \tikzstyle{decision} = [diamond, draw, aspect=2, align=center, inner sep=1pt]
+  \tikzstyle{arrow} = [->, thick]
+
+  % Nodes
+  \node[block] (start) {Check isolator counter};
+  \node[decision, below=of start] (cond) {Counter active?};
+  \node[block, below left=1.6cm and 1.8cm of cond] (force) {Force quiescent state};
+  \node[block, below right=1.6cm and 1.8cm of cond] (normal) {Continue normally};
+  \node[block, below=4.0cm of cond] (end) {Finish};
+
+  % Connections
+  \draw[arrow] (start) -- (cond);
+  \draw[arrow] (cond.south west) -- (force.north) node[midway, left] {Yes};
+  \draw[arrow] (cond.south east) -- (normal.north) node[midway, right] {No};
+  \draw[arrow] (force.south) -- ++(0,-0.6) |- (end.west);
+  \draw[arrow] (normal.south) -- ++(0,-0.6) |- (end.east);
+\end{tikzpicture}%
 }
-\end{lstlisting}
+\caption{Forcing quiescent state if the isolator counter is active}
+\end{figure}
+
+
+
+
 Another important technical detail is that we explicitly prevent the \texttt{rcu\_preempt} kernel 
 thread from running on isolated CPUs. During our experiments, we observed that the scheduler 
 occasionally places the \texttt{rcu\_preempt} kernel thread on an isolated core. Since these cores 
@@ -368,16 +397,30 @@ example, the function \texttt{ucas\_handle\_tick\_sched\_timer()} invokes
 manually, ensuring that accounting and timekeeping can still progress under 
 controlled conditions.
 
-We also provide utility functions such as 
-\texttt{ucas\_stop\_sched\_timer()} to explicitly cancel tick timers when 
-isolation is active. 
-\begin{lstlisting}[language=C, caption={Stop per-CPU scheduler timer}]
-void ucas_stop_sched_timer(void)
-{
-    struct tick_sched *ts = this_cpu_ptr(&tick_cpu_sched);
-    hrtimer_cancel(&ts->sched_timer);
-}
-\end{lstlisting}
+We also provide utility functions such as ucas\_stop\_sched\_timer() to stop
+the tick-related hrtimers immediately Figure~\ref{fig:stopticker}.
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=1.5cm, auto]
+  % Styles
+  \tikzstyle{block} = [rectangle, draw, rounded corners,
+                       minimum width=3cm, minimum height=1cm, align=center]
+  \tikzstyle{arrow} = [->, thick]
+
+  % Nodes
+  \node[block] (start) {\texttt{ucas\_stop\_sched\_timer()}};
+  \node[block, below of=start] (get) {Obtain current CPU’s \\ scheduler timer};
+  \node[block, below of=get] (cancel) {Cancel the timer};
+  \node[block, below of=cancel] (end) {Finish};
+
+  % Connections
+  \draw[arrow] (start) -- (get);
+  \draw[arrow] (get) -- (cancel);
+  \draw[arrow] (cancel) -- (end);
+\end{tikzpicture}
+\caption{Process of stopping the per-CPU scheduler timer}
+\label{fig:stopticker}
+\end{figure}
 
 This design guarantees that isolated CPUs are free from involuntary tick 
 interrupts during real-time workloads, while still allowing deferred handling 
@@ -410,27 +453,40 @@ We also provide utility functions such as
 isolation is active. We augmented the \texttt{rt\_bandwidth} 
 structure with a list node and a \texttt{deleted} flag. Each CPU maintains a 
 per-CPU list of active bandwidth structures, \texttt{ucas\_purge\_this\_cpu\_rtb()} cancel
-the timers on above per-CPU list one by one.
+the timers on above per-CPU list one by one Figure~\ref{fig:purge_flowchart}.
 
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm,
+    auto,
+    block/.style={rectangle, draw, rounded corners=1pt, 
+                 minimum width=1.8cm, minimum height=0.5cm, 
+                 font=\tiny, align=center, text width=1.6cm},
+    decision/.style={diamond, draw, aspect=1, 
+                    minimum width=1cm, minimum height=1cm,
+                    font=\tiny, align=center},
+    arrow/.style={->, >=stealth, thin}
+]
 
-\begin{lstlisting}[language=C, caption={Per-CPU RT bandwidth purge for isolator}]
-void ucas_purge_this_cpu_rtb(void)
-{
-    struct list_head local;
-    struct rt_bandwidth *rt_b, *tmp;
+% Nodes
+\node[block] (start) {Start purge};
+\node[block, below=of start] (get) {Get timer list};
+\node[decision, below=of get] (cond) {None?};
+\node[block, below=of cond] (process) {Remove\\Mark\\Cancel};
+\node[block, below=of process] (finish) {Finish};
 
-    INIT_LIST_HEAD(&local);
-    list_splice_init(this_cpu_rt_bw_list(), &local);
+% Connections
+\draw[arrow] (start) -- (get);
+\draw[arrow] (get) -- (cond);
+\draw[arrow] (cond) -- node[right] {No} (process);
+\draw[arrow] (cond.east) -- ++(0.7,0) node[above] {Yes} |- (finish.east); % 更大的间距
+\draw[arrow] (process.west) -- ++(-0.5,0) |- ([yshift=-2pt]cond.west);
 
-    list_for_each_entry_safe(rt_b, tmp, &local, node) {
-        list_del_init(&rt_b->node);
-        rt_b->deleted = 1;
-        hrtimer_cancel(&rt_b->rt_period_timer);
-    }
-}
-\end{lstlisting}
-
-
+\end{tikzpicture}
+\caption{Purging per-CPU RT bandwidth timers}
+\label{fig:purge_flowchart}
+\end{figure}
 
 \paragraph{Summary.}
 Together, the suppression of periodic tick timers and the deferral of real-time 
@@ -551,86 +607,149 @@ Here, the left edge of the persistence trace corresponds to the shortest respons
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\linewidth]{oscilloscope.png}
+  \includegraphics[width=0.8\linewidth]{figures/islintgpio.png}
   \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (isolator)}
-  \label{fig:jitter_waveform}
+  \label{fig:islintgpio}
 \end{figure}
 
 \subsection{Experimental Results}
-In a 24-hour continuous test, the system with isolator technology achieved, as show in Figure~\ref{fig:jitter_waveform}:
+In a 24-hour continuous test, the system with isolator technology achieved, as show in Figure~\ref{fig:islintgpio}:
 \begin{itemize}
-    \item Maximum response latency: 500 ns
-    \item Minimum response latency: 410 ns
-    \item Jitter: 90 ns
+    \item Period: 2 us
+    \item Maximum response latency: 470 ns
+    \item Minimum response latency: 390 ns
+    \item Jitter: 80 ns
 \end{itemize}
 
 
 By contrast, in a 24-hour continuous test,  PREEMPT-RT Linux system can only achieve maximum response latency:
-110us.
+72us.
+\begin{itemize}
+    \item Period: 200 us
+    \item Maximum response latency: 72  us
+    \item Minimum response latency: 4.1 us
+    \item Jitter: 67.9 us
+\end{itemize}
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\linewidth]{oscilloscope2.png}
+  \includegraphics[width=0.8\linewidth]{figures/linuxintgpio.png}
   \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (PREEMPT-RT Linux)}
-  \label{fig:jitter_waveform1}
+  \label{fig:linuxintgpio}
 \end{figure}
 
+The results are summarized in Table~\ref{tab:latency-comparison}.
 
-In addition to the external signal generator driven experiment, we implemented a counter-based GPIO toggling program. In this setup, the output signal is generated periodically by continuously reading the CPU timestamp counter (\texttt{CNTVCT\_EL0}) and flipping the GPIO at predefined intervals, eliminating the need for an external signal source.
+\subsection {Timestamp counter based GPIO toggling test} 
+In addition to the external signal generator driven experiment, we implemented a timestamp counter-based GPIO toggling program. In this setup, the output signal is generated periodically by continuously reading the CPU timestamp counter (\texttt{CNTVCT\_EL0}) and flipping the GPIO at predefined intervals, eliminating the need for an external signal source.
 
-The long-term experiment was conducted for 24 hours under both CPU-isolated and non-isolated environments. The results are summarized in Table~\ref{tab:counter_toggle}, showing that the isolator achieves sub-microsecond determinism, while non-isolated real-time Linux suffers from significantly larger latency
-as shown in Figure~\ref{fig:jitter_waveform3} and Figure~\ref{fig:jitter_waveform4} .
+The long-term experiment was conducted for 24 hours under both CPU-isolated and non-isolated environments. The results are summarized in Table~\ref{tab:latency-comparison1}, also showing that the isolator achieves sub-microsecond determinism, while PREEMPT-RT Linux suffers from significantly larger latency
+as shown in Figure~\ref{fig:islcountergpio} and Figure~\ref{fig:linuxcountergpio} .
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\linewidth]{oscilloscope3.png}
-  \caption{Oscilloscope maximum deviation (isolator)}
-  \label{fig:jitter_waveform3}
+  \includegraphics[width=0.8\linewidth]{figures/islcountergpio.png}
+  \caption{Timestamp counter based oscilloscope maximum deviation (isolator)}
+  \label{fig:islcountergpio}
 \end{figure}
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\linewidth]{oscilloscope4.png}
-  \caption{Oscilloscope maximum deviation (PREEMPT-RT Linux)}
-  \label{fig:jitter_waveform4}
+  \includegraphics[width=0.8\linewidth]{figures/linuxcountergpio.png}
+  \caption{Timestamp counter based oscilloscope maximum deviation (PREEMPT-RT Linux)}
+  \label{fig:linuxcountergpio}
 \end{figure}
 
-\begin{table}[h]
+
+
+\begin{table}[t]
 \centering
-\caption{Counter-based GPIO toggling experiment results over 24 hours}
-\label{tab:counter_toggle}
-\begin{tabular}{lccc}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
 \hline
-\textbf{Configuration} & \textbf{Period} & \textbf{Maximum Latency} & \textbf{Duration} \\
+\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} & \textbf{Duration} \\
 \hline
-With Isolator & 800~ns & 60~ns & 24~h \\
-Without Isolator & 200~\(\mu\)s & 68~\(\mu\)s & 24~h \\
+With Isolator & 2000~ns & 390~ns & 470~ns & 24~h \\
+PREEMPT-RT Linux & 200000~ns & 4100~ns & 72000~ns & 24~h \\
 \hline
 \end{tabular}
+}
+\caption{Latency comparison under different configurations.}
+\label{tab:latency-comparison}
 \end{table}
 
-The experiments demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (90 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency (up to 110 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
+
+\begin{table}[t]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\hline
+\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} & \textbf{Duration} \\
+\hline
+With Isolator & 2000~ns & 0~ns & 40~ns & 24~h \\
+PREEMPT-RT Linux & 200000~ns & 0~ns & 8000~ns & 24~h \\
+\hline
+\end{tabular}
+}
+\caption{Latency comparison under different configurations (Timestamp counter based).}
+\label{tab:latency-comparison1}
+\end{table}
+
+
+\subsection{Inter-core Ping-Pong Test}
+
+To further evaluate the determinism of the isolation framework in multicore environments, we
+conducted an inter-core ping-pong experiment. In this test, two application threads pinned to
+separate dedicated cores exchanged minimal messages through a shared-memory ring buffer.
+Each message transfer was accompanied by an explicit invocation of the Isolator API to trigger
+deferred maintenance tasks, thereby assessing the impact of cross-core interaction on latency
+stability.
+
+\begin{table}[t]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\hline
+\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} & \textbf{Duration} \\
+\hline
+With Isolator & 2000~ns & 120~ns & 160~ns & 24~h \\
+PREEMPT-RT Linux & 200000~ns & 1040~ns & 2200~ns & 24~h \\
+\hline
+\end{tabular}
+}
+\caption{Latency comparison under different configurations (Inter-core Ping-Pong).}
+\label{tab:latency-comparison3}
+\end{table}
+
+Results show that with the Isolator enabled, round-trip latencies consistently remained in the
+sub-microsecond range, with a minimum of about 120~ns, a maximum below 160~ns, and jitter
+under 40~ns Figure~\ref{fig:islcrossgpio}. In contrast, under PREEMPT-RT Linux, round-trip latency exhibited significant
+variability, with maximum values exceeding 2~µs Figure~\ref{fig:linuxcrossgpio}. These findings further demonstrate that the
+isolation framework effectively eliminates involuntary interruptions and ensures low-jitter,
+deterministic execution even in cross-core communication scenarios as shown in Table~\ref{tab:latency-comparison3}.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{figures/islcrosscoreintgpio.png}
+  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (isolator cross-core ping-pong)}
+  \label{fig:islcrossgpio}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{figures/linuxcrosscoreintgpio.png}
+  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (PREEMPT-RT cross-core ping-pong)}
+  \label{fig:linuxcrossgpio}
+\end{figure}
+
+The experiments in this section demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (80 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency (up to 67.9 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
 
 \section{Summary}
-This paper introduced a kernel-level isolation framework that enables deterministic sub-microsecond
-execution on Linux by eliminating involuntary interruptions on dedicated cores. The proposed design
-suppresses periodic tick timers, defers real-time bandwidth enforcement, and replaces asynchronous
-inter-processor interrupts with shared-memory coordination. Through the Isolator API, applications
-retain explicit control over when and how deferred maintenance tasks are executed, preserving both
-determinism and system correctness.  
+This paper introduced a kernel-level isolation framework that enables deterministic sub-microsecond execution on Linux by eliminating involuntary interruptions on dedicated cores. The proposed design suppresses periodic tick timers, defers real-time bandwidth enforcement, and replaces asynchronous inter-processor interrupts with shared-memory coordination. Through the Isolator API, applications retain explicit control over when and how deferred maintenance tasks are executed, preserving both determinism and system correctness.
 
-Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under
-isolator-enabled operation, GPIO response latencies consistently remain below 500~ns with jitter as
-low as 90~ns, compared to up to 110~µs latency observed on PREEMPT-RT Linux. A long-term
-counter-based GPIO toggling experiment further validated that the isolator achieves stable,
-sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency
-fluctuations in the hundreds of microseconds.  
+Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under isolator-enabled operation, GPIO response latencies consistently remain below 470ns with jitter as low as 80ns, compared to up to 72~µs latency observed on PREEMPT-RT Linux. A long-term counter-based GPIO toggling experiment further validated that the isolator achieves stable, sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency fluctuations in the hundreds of microseconds.
 
-Together, these results highlight that interrupt isolation and cooperative tick management provide a
-lightweight yet powerful strategy for achieving predictable performance on general-purpose
-operating systems. The framework enables strong temporal isolation and low-jitter execution,
-making it well suited for latency-critical scenarios such as packet processing, edge computing, and
-real-time control in embedded systems.
+Together, these results highlight that interrupt isolation and cooperative tick management provide a lightweight yet powerful strategy for achieving predictable performance on general-purpose operating systems. The framework enables strong temporal isolation and low-jitter execution, making it well suited for latency-critical scenarios such as packet processing, edge computing, and real-time control in embedded systems. Notably, the principles outlined in this work are being actively explored in Wanghuo Linux, where the isolator-inspired mechanisms are integrated into the system architecture to reinforce deterministic execution guarantees. This demonstrates the broader applicability of our design in advancing real-time performance within production-grade operating systems.
 
 \newpage
 % \printbibliography 
