@@ -66,8 +66,7 @@ handling overhead, making it challenging to achieve sub-microsecond latency.
 This work introduces an interrupt isolation approach that centralizes and minimizes timer
 interrupt interference across CPU cores. By enabling a dedicated API to selectively invoke
 timer handling routines and suppress non-critical inter-processor interrupts,
-our design significantly reduces jitter and response latency, our design significantly
-reduces jitter and response latency. Experiments conducted on an ARM-based multicore
+our design significantly reduces jitter and response latency. Experiments conducted on an ARM-based multicore
 platform demonstrate that the proposed mechanism consistently achieves sub-0.5 µs response
 times, outperforming conventional Linux PREEMPT-RT configurations. These results highlight
 the potential of interrupt isolation as a lightweight and effective strategy for
