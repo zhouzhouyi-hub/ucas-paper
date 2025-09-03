@@ -696,14 +696,16 @@ PREEMPT-RT Linux & 200000~ns & 0~ns & 8000~ns & 24~h \\
 \end{table}
 
 
-\subsection{Inter-core Ping-Pong Test}
+\subsection{Inter-core Communication Delay Measurement}
 
 To further evaluate the determinism of the isolation framework in multicore environments, we
-conducted an inter-core ping-pong experiment. In this test, two application threads pinned to
-separate dedicated cores exchanged minimal messages through a shared-memory ring buffer.
-Each message transfer was accompanied by an explicit invocation of the Isolator API to trigger
-deferred maintenance tasks, thereby assessing the impact of cross-core interaction on latency
-stability.
+conducted an inter-core communication delay experiment using GPIO and inter-processor interrupts (IPIs).
+In this setup, Core~A raises \texttt{GPIO1} and simultaneously sends an IPI to Core~B. Upon receiving
+the interrupt, Core~B responds by raising \texttt{GPIO2}.
+The other ends of GPIO1 and GPIO2 are connected to Channel 1 and Channel 2 of the oscilloscope, respectively.
+The latency between the two GPIO transitions,
+captured by the oscilloscope, directly reflects the inter-core communication delay.
+
 
 \begin{table}[t]
 \centering
@@ -717,30 +719,47 @@ PREEMPT-RT Linux & 200000~ns & 1040~ns & 2200~ns & 24~h \\
 \hline
 \end{tabular}
 }
-\caption{Latency comparison under different configurations (Inter-core Ping-Pong).}
+\caption{Latency comparison under different configurations (Inter-core communication delay).}
 \label{tab:latency-comparison3}
 \end{table}
 
-Results show that with the Isolator enabled, round-trip latencies consistently remained in the
-sub-microsecond range, with a minimum of about 120~ns, a maximum below 160~ns, and jitter
-under 40~ns Figure~\ref{fig:islcrossgpio}. In contrast, under PREEMPT-RT Linux, round-trip latency exhibited significant
-variability, with maximum values exceeding 2~µs Figure~\ref{fig:linuxcrossgpio}. These findings further demonstrate that the
-isolation framework effectively eliminates involuntary interruptions and ensures low-jitter,
-deterministic execution even in cross-core communication scenarios as shown in Table~\ref{tab:latency-comparison3}.
+Results show that with the Isolator enabled, inter-core communication latency consistently remained
+in the sub-microsecond range, with a minimum of about 120~ns, a maximum below 160~ns, and jitter
+under 40~ns, as illustrated in Figure~\ref{fig:islcrossgpio}. In contrast, under PREEMPT-RT Linux,
+latency exhibited significant variability, with maximum values exceeding 2~µs
+(Figure~\ref{fig:linuxcrossgpio}). These findings demonstrate that the isolation framework effectively
+eliminates involuntary interruptions and ensures low-jitter, deterministic execution in cross-core
+communication scenarios, as summarized in Table~\ref{tab:latency-comparison3}.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.8\linewidth]{figures/islcrosscoreintgpio.png}
-  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (isolator cross-core ping-pong)}
+  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (Isolator cross-core communication).}
   \label{fig:islcrossgpio}
 \end{figure}
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.8\linewidth]{figures/linuxcrosscoreintgpio.png}
-  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (PREEMPT-RT cross-core ping-pong)}
+  \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (PREEMPT-RT Linux cross-core communication).}
   \label{fig:linuxcrossgpio}
 \end{figure}
+
+\subsection{Oscilloscope Persistence Mode for Long-Term Measurements}
+
+To capture latency characteristics over long observation periods, we employed the persistence
+mode of the oscilloscope. In this mode, each newly acquired waveform is overlaid on top of
+previous captures. Older traces gradually fade while more recent ones remain bright, resulting
+in an accumulated display of thousands or even millions of measurements.
+
+This visualization technique makes it possible to observe both the shortest and longest response
+times within a single composite waveform. By continuously running the inter-core communication
+test for 24 hours, the persistence display revealed the absolute minimum and maximum GPIO
+transition delays, ensuring that rare outliers were not overlooked. As shown in
+the Figures in this section, the persistence mode provided
+a clear and intuitive representation of latency bounds under both the Isolator and PREEMPT-RT
+configurations.
+
 
 The experiments in this section demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (80 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency (up to 67.9 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
 
