@@ -374,7 +374,7 @@ of RCU for the rest of the system.
 
 \subsection{Time Scheduler Deferral}
 \paragraph{Tick Subsystem Modifications.}
-The Linux \texttt{tick-sched.c} subsystem manages periodic scheduling ticks and 
+The Linux \texttt{tick-sched} subsystem manages periodic scheduling ticks and 
 nohz (tickless) operation. By default, each CPU receives periodic tick events 
 driven by high-resolution timers, which are used to drive process accounting, 
 timekeeping, and load balancing. However, on isolated CPUs dedicated to 
@@ -437,18 +437,8 @@ While this mechanism ensures fairness and prevents runaway RT tasks, it also
 introduces recurring interrupts that can preempt high-priority user-level 
 workloads running on isolated CPUs.
 
-To eliminate this source of interference, we introduce a deferral mechanism 
-based on a per-CPU counter (\texttt{ucas\_counter}). When this counter is 
-non-zero, the function \texttt{sched\_rt\_period\_timer()} detects the 
-condition and suppresses execution of the periodic quota enforcement logic. 
-Instead, the scheduler records the affected \texttt{rt\_bandwidth} instance in 
-per-CPU state (\texttt{ucas\_rb}, \texttt{ucas\_rt\_period}, and 
-\texttt{ucas\_jiffies\_rt}), and defers processing until explicitly invoked by 
-the isolator through \texttt{ucas\_handle\_sched\_rt\_timer()}. This handler 
-later computes the overrun and applies bandwidth enforcement in a controlled 
-manner, ensuring correctness while avoiding involuntary interrupts.
-
-We also provide utility functions such as 
+To eliminate this source of interference, 
+We provide utility functions such as 
 \texttt{ucas\_purge\_this\_cpu\_rtb()} to explicitly cancel real-time bandwidth timers when 
 isolation is active. We augmented the \texttt{rt\_bandwidth} 
 structure with a list node and a \texttt{deleted} flag. Each CPU maintains a 
@@ -502,23 +492,16 @@ modifying the logic responsible for IPI target selection, the kernel dynamically
 CPUs from cross-core signaling paths.
 This ensures that CPUs dedicated to real-time or latency-sensitive processing remain unaffected
 by kernel events originating from other cores, thereby improving predictability and scalability.
-Technical Implications
-Avoids cache line bouncing and contention due to remote invalidations,
-Improves temporal isolation between application cores and system housekeeping,
-Enhances real-time scheduling fidelity in multi-core environments.
+
 
 \subsection{Tickless Operation Enforcement}
 The enforcement of tickless operation for isolated CPUs is achieved by disabling the kernel's
 internal logic for restarting periodic scheduler ticks. Isolated CPUs are instead allowed to operate
 independently of the kernel's timekeeping framework unless explicitly re-engaged by user-level
 logic.
-A fallback function () is provided to perform minimal time accounting when needed, ensuring
+Callback functions are provided to perform minimal time accounting when needed, ensuring
 correctness of process time tracking while preserving user-space control.
-Technical Implications
-Enables fully tickless execution on isolated CPUs, reducing kernel-induced jitter,
-Eliminates background timer interrupts that may interfere with deterministic workloads,
-Facilitates fine-grained control over timekeeping from user space, which is critical in real-time
-systems.
+
 
 \subsection{Inter-Core Communication for the Isolated Core}
 
@@ -766,7 +749,7 @@ The experiments in this section demonstrate that using the isolator significantl
 \section{Summary}
 This paper introduced a kernel-level isolation framework that enables deterministic sub-microsecond execution on Linux by eliminating involuntary interruptions on dedicated cores. The proposed design suppresses periodic tick timers, defers real-time bandwidth enforcement, and replaces asynchronous inter-processor interrupts with shared-memory coordination. Through the Isolator API, applications retain explicit control over when and how deferred maintenance tasks are executed, preserving both determinism and system correctness.
 
-Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under isolator-enabled operation, GPIO response latencies consistently remain below 470ns with jitter as low as 80ns, compared to up to 72~µs latency observed on PREEMPT-RT Linux. A long-term counter-based GPIO toggling experiment further validated that the isolator achieves stable, sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency fluctuations in the hundreds of microseconds.
+Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under isolator-enabled operation, GPIO response latencies consistently remain below 470ns with jitter as low as 80ns, compared to up to 72~µs latency observed on PREEMPT-RT Linux. A timestamp-counter based GPIO toggling experiment further validated that the isolator achieves stable, sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency fluctuations in the hundreds of microseconds.
 
 Together, these results highlight that interrupt isolation and cooperative tick management provide a lightweight yet powerful strategy for achieving predictable performance on general-purpose operating systems. The framework enables strong temporal isolation and low-jitter execution, making it well suited for latency-critical scenarios such as packet processing, edge computing, and real-time control in embedded systems. Notably, the principles outlined in this work are being actively explored in Wanghuo Linux, where the isolator-inspired mechanisms are integrated into the system architecture to reinforce deterministic execution guarantees. This demonstrates the broader applicability of our design in advancing real-time performance within production-grade operating systems.
 
