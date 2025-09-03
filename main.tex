@@ -64,8 +64,9 @@ dengke.du, mengke.sun\}@ucas.com.cn\\
 Real-time responsiveness in Linux is often constrained by interrupt contention and timer
 handling overhead, making it challenging to achieve sub-microsecond latency.
 This work introduces an interrupt isolation approach that centralizes and minimizes timer
-interrupt interference across CPU cores. By redirecting periodic timer events to a
-dedicated core and suppressing redundant inter-processor interrupts, our design significantly
+interrupt interference across CPU cores. By enabling a dedicated API to selectively invoke
+timer handling routines and suppress non-critical inter-processor interrupts,
+our design significantly reduces jitter and response latency, our design significantly
 reduces jitter and response latency. Experiments conducted on an ARM-based multicore
 platform demonstrate that the proposed mechanism consistently achieves sub-0.5 µs response
 times, outperforming conventional Linux PREEMPT-RT configurations. These results highlight
