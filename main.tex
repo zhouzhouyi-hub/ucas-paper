@@ -132,8 +132,8 @@ designed to achieve deterministic sub-microsecond response times.
 Our mechanism introduces two key innovations:
 
 \begin{itemize}
-    \item \textbf{Centralized Timer Handling:} Timer interrupt processing is completely disabled on selected cores. 
-    All kernel tick-related activities are redirected to a dedicated maintenance core, 
+    \item \textbf{Centralized Timer Handling:} Tick-related timer interrupt processing is completely disabled on selected cores. 
+    All tick-related activities previously executed on the isolated core are selectively invoked via a dedicated API,
     which periodically executes the timer functionalities required for global correctness. 
     This ensures that isolated cores run without local timer interruptions.
     
@@ -144,7 +144,7 @@ Our mechanism introduces two key innovations:
 
 This level of isolation is not achievable with existing mechanisms such as 
 \texttt{NOHZ\_FULL} or \texttt{isolcpus} alone. 
-By explicitly separating time-related kernel responsibilities and reassigning them to a dedicated core, 
+By explicitly separating time-related kernel responsibilities and reassigning them to dedicated API, 
 and by handling inter-core coordination through shared memory rather than IPIs, 
 isolated cores execute continuously without interruption.  
 
