@@ -120,13 +120,10 @@ Consequently, even cores exempt from ticks may still face arbitrary
 interruptions caused by global kernel coordination mechanisms.  
 
 \subsection{Motivation}
-These limitations highlight a fundamental challenge: 
-\textbf{conventional mechanisms are insufficient for achieving 
-sub-microsecond, deterministic response times in Linux}. 
-To address this, we propose an \textbf{interrupt isolation framework} 
-that centralizes timer interrupt handling and suppresses unnecessary IPIs, 
-thereby enabling Linux systems to deliver 
-\textbf{sub-0.5~$\mu$s response times} for real-time workloads.  
+These limitations highlight a fundamental challenge:
+\textbf{conventional mechanisms are insufficient for achieving sub-microsecond, deterministic response times in Linux}.
+In latency-critical domains such as high-frequency trading, average latency has already been driven to the nanosecond scale, making \textbf{jitter—even at nanosecond resolution—the decisive competitive factor}  \cite{risk2024ultra}.  Systems that sustain nanosecond-level determinism consistently outperform those with microsecond variability.
+To address this, we propose an \textbf{interrupt isolation framework} that centralizes timer interrupt handling and suppresses unnecessary IPIs, enabling Linux systems to deliver \textbf{sub-0.5~$\mu$s response times} for real-time workloads.
 
 \subsection{Our Approach: Full Isolation via Centralized Timer Handling and Shared-Memory IPI Management}
 
