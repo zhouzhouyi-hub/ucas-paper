@@ -132,10 +132,11 @@ designed to achieve deterministic sub-microsecond response times.
 Our mechanism introduces two key innovations:
 
 \begin{itemize}
-    \item \textbf{Centralized Timer Handling:} Tick-related timer interrupt processing is completely disabled on selected cores. 
-    All tick-related activities previously executed on the isolated core are selectively invoked via a dedicated API,
-    which periodically executes the timer functionalities required for global correctness. 
-    This ensures that isolated cores run without local timer interruptions.
+\item \textbf{Centralized Timer Handling:} Centralized Timer Handling. We centralize tick work that previously executed on the isolated core
+  and expose it through a dedicated polling API. This API is not automatic; the real-time user code must call it periodically
+  (or at application-chosen safe points). If the tick work is completely disabled—so that functions such as \texttt{account\_process\_tick} are
+  never invoked—these routines simply do not execute. While this does not compromise system stability, it suppresses time accounting and related statistics.
+  Users who require these updates can invoke the API on demand to run the deferred tick work.
     
     \item \textbf{Shared-Memory IPI Management:} Non-essential inter-processor interrupts (IPIs) to isolated cores 
     are suppressed. Coordination that would normally trigger IPIs is instead implemented via shared memory, 
@@ -157,7 +158,7 @@ of high-precision tasks free from interference by timer events or other system o
 \section{Related Work}\label{BG}
 \subsection{Timer Interrupt Control in the Linux Kernel}
 
-The concept of timer tickers in operating systems predates the development of the Linux kernel \cite{Corbet}. 
+The concept of timer ticks in operating systems predates the development of the Linux kernel \cite{Corbet}. 
 In Linux, periodic timer interrupts, commonly referred to as \emph{ticks}, are scheduled on each CPU core 
 to support timekeeping, process accounting, and scheduler activation. These interrupts typically occur at 
 frequencies between 250 Hz and 1 kHz and may preempt running tasks to perform kernel maintenance.  
@@ -228,9 +229,9 @@ The system architecture is designed to provide a robust, low-latency environment
 The design, illustrated in Figure~\ref{fig:isolator_flow}, is built around three core mechanisms:
 
 \begin{enumerate}
-    \item \textbf{Isolation Enabling:} The process begins by invoking \texttt{isolator\_start()} with a specified mask (e.g., \texttt{ISOLATOR\_MASK\_CLOCK}, \texttt{ISOLATOR\_MASK\_RESCHED}, \texttt{ISOLATOR\_MASK\_IPI}). This function initiates the isolation state on a core, effectively severing its interaction with standard OS interrupt mechanisms. Crucially, this involves suppressing Inter-Processor Interrupts (IPIs) by replacing them with a deterministic, shared-memory-based message-passing system for cross-kernel communication. It also halts Linux's periodic timers, such as the scheduler tick and real-time bandwidth timer.
+    \item \textbf{Isolation Enabling:} The process begins by invoking \texttt{isolator\_start} with a specified mask (e.g., \texttt{ISOLATOR\_MASK\_CLOCK}, \texttt{ISOLATOR\_MASK\_RESCHED}, \texttt{ISOLATOR\_MASK\_IPI}). This function initiates the isolation state on a core, effectively severing its interaction with standard OS interrupt mechanisms. Crucially, this involves suppressing Inter-Processor Interrupts (IPIs) by replacing them with a deterministic, shared-memory-based message-passing system for cross-kernel communication. It also halts Linux's periodic timers, such as the scheduler tick and real-time bandwidth timer.
 
-    \item \textbf{Periodic Maintenance via a Ticker:} While isolated, the core executes its real-time workload without interruption. However, to maintain system health and coherence, certain clock-related functions must still be performed periodically or on-demand. This is handled by the \texttt{isolator\_ticker()} function, which is invoked by the application itself. This function acts as a managed tick, allowing the isolated core to voluntarily execute maintenance tasks---such as scheduling decisions (\texttt{TICKER\_SCHED}), real-time task management (\texttt{TICKER\_RT}), and time synchronization (\texttt{TICKER\_TSC\_SYNC})---at a time of its choosing, thus preserving determinism.
+    \item \textbf{Periodic Maintenance via a Tick:} While isolated, the core executes its real-time workload without interruption. However, to maintain system health and coherence, certain clock-related functions must still be performed periodically or on-demand. This is handled by the \texttt{isolator\_tick} function, which is invoked by the application itself. This function acts as a managed tick, allowing the isolated core to voluntarily execute maintenance tasks---such as scheduling decisions (\texttt{TICK\_SCHED}), real-time task management (\texttt{TICK\_RT}), and time synchronization (\texttt{TICK\_TSC\_SYNC})---at a time of its choosing, thus preserving determinism.
 
     \item \textbf{Isolation Teardown:} Upon completion of the real-time task, the isolation state is ended. This final stage gracefully reintegrates the core back into the broader OS environment. The mechanism restarts the standard Linux periodic timers and re-enables the full IPI handling, ensuring the core returns to normal operation without any residual state from the isolation period.
 \end{enumerate}
@@ -251,7 +252,7 @@ In summary, the design replaces the traditional preemptive, interrupt-driven OS 
 The kernel was modified to explicitly recognize the isolation state of a core.
 When a core is set to isolation mode, its local tick logic, normally executed in
 \texttt{update\_process\_times} and \texttt{scheduler\_tick},
-is completely bypassed unless explicitly triggered through the \texttt{isolator\_ticker} function.
+is completely bypassed unless explicitly triggered through the \texttt{isolator\_tick} function.
 In addition, all asynchronous inter-processor interrupts (IPIs) that might interfere with the
 isolated core are suppressed. The key mechanisms implemented for timer bypass and interrupt suppression are described below.
 
@@ -268,7 +269,7 @@ the unpredictability of standard IPIs. Specific handling includes:
 \begin{itemize}
     \item \textbf{RCU (Read-Copy Update):} Upon entering isolation, the RCU subsystem is notified that the core is isolated and must be excluded from grace period calculations. 
     \item \textbf{TLB Shootdowns:} IPIs requesting Translation Lookaside Buffer flushes are suppressed and queued in shared memory.
-      The isolated core processes these flush requests the next time it invokes \texttt{isolator\_ticker}.
+      The isolated core processes these flush requests the next time it invokes \texttt{isolator\_tick}.
     \item \textbf{CPU Frequency Scaling:} IPIs induced by CPU frequency changes are disabled to avoid unwanted interruptions.
 \end{itemize}
 
@@ -276,7 +277,7 @@ the unpredictability of standard IPIs. Specific handling includes:
 Even after stopping periodic timers, the isolated core maintains a consistent notion of system time through \texttt{isolator\_get\_monotonic\_time}, which provides a linearized timestamp in microseconds. The \texttt{isolator\_poll\_until} function allows predictable wake-ups for polling operations without relying on standard kernel timers.
 
 \paragraph{Periodic Maintenance}  
-Deferred timer tasks and queued IPI processing are executed only when the isolated core voluntarily calls \texttt{isolator\_ticker}. This ensures deterministic behavior while still allowing the core to perform necessary maintenance tasks at controlled intervals.
+Deferred timer tasks and queued IPI processing are executed only when the isolated core voluntarily calls \texttt{isolator\_tick}. This ensures deterministic behavior while still allowing the core to perform necessary maintenance tasks at controlled intervals.
 
 \paragraph{Restoration Mechanism}  
 When isolation ends, previously canceled Linux timers and real-time bandwidth timers are restarted, and normal IPI handling is restored. The core then returns to standard operation, with all periodic activities and inter-core notifications resumed.
@@ -316,7 +317,7 @@ DEFINE_PER_CPU(atomic_t,
 \end{lstlisting}
 Each entry in this array acts as a flag indicating whether the corresponding CPU is currently under
 isolation. This flag is incremented by user-space applications via a custom system call or API
-(isolator\_start()) and is read by kernel components to selectively disable or defer their operations.
+(isolator\_start) and is read by kernel components to selectively disable or defer their operations.
 
 
 \subsection{RCU Grace Period Handling}
@@ -383,22 +384,22 @@ source of nondeterministic interruptions.
 
 To address this, we introduced a per-CPU flag (\texttt{ucas\_counter}) that 
 controls whether tick-related hrtimers should be restarted or suppressed. When 
-this counter is non-zero, functions such as \texttt{tick\_nohz\_restart()}, 
-\texttt{tick\_nohz\_idle\_restart\_tick()}, \texttt{tick\_nohz\_handler()}, 
-and \texttt{tick\_sched\_timer()} are modified to immediately return without 
+this counter is non-zero, functions such as \texttt{tick\_nohz\_restart}, 
+\texttt{tick\_nohz\_idle\_restart\_tick}, \texttt{tick\_nohz\_handler}, 
+and \texttt{tick\_sched\_timer} are modified to immediately return without 
 restarting the periodic scheduler timer. This effectively disables the 
 recurring tick on isolated CPUs, preventing spurious wakeups and involuntary 
 kernel execution.
 
 In order to preserve correctness, we provide helper routines that allow the 
 isolator subsystem to explicitly handle deferred tick events when needed. For 
-example, the function \texttt{ucas\_handle\_tick\_sched\_timer()} invokes 
-\texttt{tick\_sched\_do\_timer()} and \texttt{update\_process\_times()} 
+example, the function \texttt{ucas\_handle\_tick\_sched\_timer} invokes 
+\texttt{tick\_sched\_do\_timer} and \texttt{update\_process\_times} 
 manually, ensuring that accounting and timekeeping can still progress under 
 controlled conditions.
 
-We also provide utility functions such as ucas\_stop\_sched\_timer() to stop
-the tick-related hrtimers immediately Figure~\ref{fig:stopticker}.
+We also provide utility functions such as ucas\_stop\_sched\_timer to stop
+the tick-related hrtimers immediately Figure~\ref{fig:stoptick}.
 \begin{figure}[h]
 \centering
 \begin{tikzpicture}[node distance=1.5cm, auto]
@@ -408,7 +409,7 @@ the tick-related hrtimers immediately Figure~\ref{fig:stopticker}.
   \tikzstyle{arrow} = [->, thick]
 
   % Nodes
-  \node[block] (start) {\texttt{ucas\_stop\_sched\_timer()}};
+  \node[block] (start) {\texttt{ucas\_stop\_sched\_timer}};
   \node[block, below of=start] (get) {Obtain current CPU’s \\ scheduler timer};
   \node[block, below of=get] (cancel) {Cancel the timer};
   \node[block, below of=cancel] (end) {Finish};
@@ -419,7 +420,7 @@ the tick-related hrtimers immediately Figure~\ref{fig:stopticker}.
   \draw[arrow] (cancel) -- (end);
 \end{tikzpicture}
 \caption{Process of stopping the per-CPU scheduler timer}
-\label{fig:stopticker}
+\label{fig:stoptick}
 \end{figure}
 
 This design guarantees that isolated CPUs are free from involuntary tick 
@@ -439,10 +440,10 @@ workloads running on isolated CPUs.
 
 To eliminate this source of interference, 
 We provide utility functions such as 
-\texttt{ucas\_purge\_this\_cpu\_rtb()} to explicitly cancel real-time bandwidth timers when 
+\texttt{ucas\_purge\_this\_cpu\_rtb} to explicitly cancel real-time bandwidth timers when 
 isolation is active. We augmented the \texttt{rt\_bandwidth} 
 structure with a list node and a \texttt{deleted} flag. Each CPU maintains a 
-per-CPU list of active bandwidth structures, \texttt{ucas\_purge\_this\_cpu\_rtb()} cancel
+per-CPU list of active bandwidth structures, \texttt{ucas\_purge\_this\_cpu\_rtb} cancel
 the timers on above per-CPU list one by one Figure~\ref{fig:purge_flowchart}.
 
 \begin{figure}[h]
