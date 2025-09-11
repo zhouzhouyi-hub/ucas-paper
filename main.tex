@@ -333,34 +333,36 @@ fully dedicated to user-level workloads and should not incur involuntary kernel 
 We add following following condition to RCU kernel functions:
 
 
-\begin{figure}[h]
+\begin{figure}[t]
 \centering
-\resizebox{0.45\textwidth}{!}{%
-\begin{tikzpicture}[node distance=1.4cm, auto]
+\resizebox{0.85\columnwidth}{!}{%
+\begin{tikzpicture}[node distance=1.0cm, auto]
   % Styles
   \tikzstyle{block} = [rectangle, draw, rounded corners,
-                       minimum width=3cm, minimum height=0.9cm, align=center]
-  \tikzstyle{decision} = [diamond, draw, aspect=2, align=center, inner sep=1pt]
+                       minimum width=2.2cm, minimum height=0.8cm, 
+                       align=center, font=\small]
+  \tikzstyle{decision} = [diamond, draw, aspect=2, align=center, 
+                          inner sep=1pt, font=\small]
   \tikzstyle{arrow} = [->, thick]
 
   % Nodes
   \node[block] (start) {Check isolator counter};
   \node[decision, below=of start] (cond) {Counter active?};
-  \node[block, below left=1.6cm and 1.8cm of cond] (force) {Force quiescent state};
-  \node[block, below right=1.6cm and 1.8cm of cond] (normal) {Continue normally};
-  \node[block, below=4.0cm of cond] (end) {Finish};
+  \node[block, below left=1.0cm and 1.4cm of cond] (force) {Force quiescent state};
+  \node[block, below right=1.0cm and 1.4cm of cond] (normal) {Continue normally};
+  \node[block, below=2.6cm of cond] (end) {Finish};
 
   % Connections
   \draw[arrow] (start) -- (cond);
   \draw[arrow] (cond.south west) -- (force.north) node[midway, left] {Yes};
   \draw[arrow] (cond.south east) -- (normal.north) node[midway, right] {No};
-  \draw[arrow] (force.south) -- ++(0,-0.6) |- (end.west);
-  \draw[arrow] (normal.south) -- ++(0,-0.6) |- (end.east);
+  \draw[arrow] (force.south) -- ++(0,-0.4) |- (end.west);
+  \draw[arrow] (normal.south) -- ++(0,-0.4) |- (end.east);
 \end{tikzpicture}%
 }
-\caption{Forcing quiescent state if the isolator counter is active}
+\caption{Flowchart for enforcing quiescent state when the isolator counter is active.}
+\label{fig:quiescent}
 \end{figure}
-
 
 
 
@@ -399,30 +401,38 @@ example, the function \texttt{ucas\_handle\_tick\_sched\_timer} invokes
 manually, ensuring that accounting and timekeeping can still progress under 
 controlled conditions.
 
-We also provide utility functions such as ucas\_stop\_sched\_timer to stop
+We also provide utility functions such as \texttt{ucas\_stop\_sched\_timer} to stop
 the tick-related hrtimers immediately Figure~\ref{fig:stoptick}.
-\begin{figure}[h]
+
+\begin{figure}[t]
 \centering
-\begin{tikzpicture}[node distance=1.5cm, auto]
-  % Styles
-  \tikzstyle{block} = [rectangle, draw, rounded corners,
-                       minimum width=3cm, minimum height=1cm, align=center]
-  \tikzstyle{arrow} = [->, thick]
+\begin{tikzpicture}[node distance=0.9cm, auto]
+  % Styles (use \tikzset instead of deprecated \tikzstyle)
+  \tikzset{
+    block/.style={
+      rectangle, draw, rounded corners,
+      minimum width=2.2cm, minimum height=0.8cm,
+      inner xsep=6pt, inner ysep=4pt,
+      align=center, font=\small
+    },
+    arrow/.style={-Latex, semithick}
+  }
 
   % Nodes
   \node[block] (start) {\texttt{ucas\_stop\_sched\_timer}};
-  \node[block, below of=start] (get) {Obtain current CPU’s \\ scheduler timer};
-  \node[block, below of=get] (cancel) {Cancel the timer};
-  \node[block, below of=cancel] (end) {Finish};
+  \node[block, below=of start] (get) {Obtain current CPU's\\scheduler timer};
+  \node[block, below=of get] (cancel) {Cancel the timer};
+  \node[block, below=of cancel] (end) {Finish};
 
   % Connections
   \draw[arrow] (start) -- (get);
   \draw[arrow] (get) -- (cancel);
   \draw[arrow] (cancel) -- (end);
 \end{tikzpicture}
-\caption{Process of stopping the per-CPU scheduler timer}
+\caption{Flowchart for stopping the per-CPU scheduler timer.}
 \label{fig:stoptick}
 \end{figure}
+
 
 This design guarantees that isolated CPUs are free from involuntary tick 
 interrupts during real-time workloads, while still allowing deferred handling 
@@ -447,38 +457,43 @@ structure with a list node and a \texttt{deleted} flag. Each CPU maintains a
 per-CPU list of active bandwidth structures, \texttt{ucas\_purge\_this\_cpu\_rtb} cancel
 the timers on above per-CPU list one by one Figure~\ref{fig:purge_flowchart}.
 
-\begin{figure}[h]
+\begin{figure}[t]
 \centering
 \begin{tikzpicture}[
-    node distance=0.6cm,
-    auto,
-    block/.style={rectangle, draw, rounded corners=1pt, 
-                 minimum width=1.8cm, minimum height=0.5cm, 
-                 font=\tiny, align=center, text width=1.6cm},
-    decision/.style={diamond, draw, aspect=1, 
-                    minimum width=1cm, minimum height=1cm,
-                    font=\tiny, align=center},
-    arrow/.style={->, >=stealth, thin}
+  node distance=1.0cm and 1.4cm,
+  >=Latex,
+  block/.style={
+    rectangle, rounded corners=2pt, draw,
+    align=center, font=\scriptsize,
+    minimum width=2.3cm, minimum height=0.9cm
+  },
+  decision/.style={
+    diamond, draw, aspect=1.4, align=center,
+    font=\scriptsize, inner sep=1pt,
+    minimum width=1.6cm, minimum height=1.0cm
+  },
+  arrow/.style={->, semithick}
 ]
 
 % Nodes
-\node[block] (start) {Start purge};
-\node[block, below=of start] (get) {Get timer list};
-\node[decision, below=of get] (cond) {None?};
-\node[block, below=of cond] (process) {Remove\\Mark\\Cancel};
-\node[block, below=of process] (finish) {Finish};
+\node[block]    (start)   {Start purge};
+\node[block,    below=of start] (get) {Get timer list};
+\node[decision, below=of get]   (cond) {No timer?};
+\node[block,    below=of cond]  (proc) {Remove \\ Mark \\ Cancel};
+\node[block,    below=of proc]  (finish) {Finish};
 
 % Connections
 \draw[arrow] (start) -- (get);
 \draw[arrow] (get) -- (cond);
-\draw[arrow] (cond) -- node[right] {No} (process);
-\draw[arrow] (cond.east) -- ++(0.7,0) node[above] {Yes} |- (finish.east); % 更大的间距
-\draw[arrow] (process.west) -- ++(-0.5,0) |- ([yshift=-2pt]cond.west);
+\draw[arrow] (cond.south) -- node[right, xshift=2pt] {No} (proc.north);
+\draw[arrow] (cond.east) -- ++(1.0,0) node[above, pos=0.55] {Yes} |- (finish.east);
+\draw[arrow] (proc.west) -- ++(-1.0,0) |- (cond.west);
 
 \end{tikzpicture}
-\caption{Purging per-CPU RT bandwidth timers}
+\caption{Procedure for purging per-CPU real-time bandwidth timers.}
 \label{fig:purge_flowchart}
 \end{figure}
+
 
 \paragraph{Summary.}
 Together, the suppression of periodic tick timers and the deferral of real-time 
@@ -559,6 +574,17 @@ communication and coordination with other cores.
 
 
 \section{Evaluation: Deterministic Execution with CPU Isolator}
+
+
+\label{sec:eval-iso}
+We evaluate our CPU isolator on a real-time Linux kernel derived from the
+\texttt{linux-6.6-rt} branch of the Phytium Linux Kernel repository
+(version~6.6.63) \cite{phytium-linux-6.6-rt}. Unless noted otherwise,
+all measurements were taken on this kernel with \texttt{PREEMPT\_RT} enabled.
+For completeness, we also maintain support for earlier Linux kernels used in
+legacy deployments; our changes have been kept portable and can be applied to
+older branches with minor, mechanical adjustments.
+
 
 The experimental setup consists of the following equipment:  
 \begin{itemize}
