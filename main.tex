@@ -577,13 +577,18 @@ communication and coordination with other cores.
 
 
 \label{sec:eval-iso}
-We evaluate our CPU isolator on a real-time Linux kernel derived from the
-\texttt{linux-6.6-rt} branch of the Phytium Linux Kernel repository
-(version~6.6.63) \cite{phytium-linux-6.6-rt}. Unless noted otherwise,
-all measurements were taken on this kernel with \texttt{PREEMPT\_RT} enabled.
-For completeness, we also maintain support for earlier Linux kernels used in
-legacy deployments; our changes have been kept portable and can be applied to
-older branches with minor, mechanical adjustments.
+We conducted our evaluation of the CPU isolator on a real-time Linux kernel 
+derived from the \texttt{linux-6.6-rt} branch of the Phytium Linux Kernel 
+repository (version~6.6.63) \cite{phytium-linux-6.6-rt}. Unless otherwise specified, 
+all experiments were performed on this kernel with \texttt{PREEMPT\_RT} enabled. 
+Importantly, we adapted and extended the kernel to support our isolator, marking 
+a key innovation of our work rather than relying solely on the baseline Phytium 
+Linux distribution. For completeness, we also maintain support for earlier Linux 
+kernels used in legacy deployments; our changes have been kept portable and can 
+be applied to older branches with only minor, mechanical adjustments.
+
+
+
 
 
 The experimental setup consists of the following equipment:  
