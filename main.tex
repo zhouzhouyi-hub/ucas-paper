@@ -87,7 +87,7 @@ mechanisms: \emph{periodic timer interrupts} and
 \subsection{Timer Interrupts}
 In Linux, periodic timer interrupts (commonly referred to as \emph{ticks})
 are scheduled on every CPU core to maintain system time and perform
-kernel housekeeping tasks. This design reflects the traditional reliance
+kernel housekeeping tasks\cite{Corbet}. This design reflects the traditional reliance
 of Unix-like operating systems on timer interrupts for core kernel
 functions, as documented in 
 ``Clock Interrupt Handling''~\cite[Section~5.2]{Vahalia96}.
@@ -141,6 +141,15 @@ Our mechanism introduces two key innovations:
     \item \textbf{Shared-Memory IPI Management:} Non-essential inter-processor interrupts (IPIs) to isolated cores 
     are suppressed. Coordination that would normally trigger IPIs is instead implemented via shared memory, 
     allowing controlled and predictable communication without asynchronous preemption.
+
+    The suppression mechanism works by:
+    
+    1. Masking actual IPI delivery to isolated cores
+    
+    2. Providing virtual IPI completion status to the sender
+    
+    3. Ensuring synchronization primitives (e.g., TLB shootdowns) appear to complete
+    
 \end{itemize}
 
 This level of isolation is not achievable with existing mechanisms such as 
