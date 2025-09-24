@@ -176,7 +176,10 @@ To reduce the overhead caused by frequent ticks, \emph{tickless} systems were in
 The \texttt{NO\_HZ} feature disables timer interrupts on idle CPUs, and its extension, 
 \texttt{NOHZ\_FULL}, attempts to eliminate ticks even during active user-space execution \cite{KernelDocNOHZ}. 
 However, timer ticks still occur on \texttt{NO\_HZ}/\texttt{NOHZ\_FULL} CPUs because the kernel must perform 
-statistics collection and other internal bookkeeping \cite{stackoverflow}.  
+statistics collection and other internal bookkeeping \cite{stackoverflow} \footnote{ Upon further examination of
+the latest kernel code \cite{torvalds2025linux}, the function tick\_nohz\_idle\_stop\_tick which stops
+the timer ticks is only invoked when the system enters an idle state. In our specific application
+scenario, isolated CPU cores will not enter an idle state as long as they are running applications.}.
 
 While these mechanisms help reduce timer-induced jitter, they do not completely eliminate all sources of latency, 
 leaving real-time workloads exposed to residual interruptions.
