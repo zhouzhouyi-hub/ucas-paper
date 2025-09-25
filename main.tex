@@ -202,7 +202,9 @@ address each source of cross-core interrupts. For example, unloading block devic
 IPIs, so such operations should be avoided in latency-critical environments. Similarly, CPU frequency 
 statistics require IPIs to query other cores; disabling dynamic frequency scaling or using a fixed-frequency 
 mode eliminates this source of latency. By analyzing and selectively suppressing IPI-inducing operations—such as 
-TLB shootdowns, RCU callbacks, and scheduler balancing—we can remove unnecessary cross-core interruptions, 
+TLB shootdowns, RCU callbacks\footnote{RCU uses IPIs for expedited grace periods, but we disable expedited
+grace periods for real-time workloads by using rcupdate.rcu\_normal},
+and scheduler balancing—we can remove unnecessary cross-core interruptions, 
 ensuring deterministic execution for real-time tasks. Combined with CPU isolation and IRQ affinity tuning, 
 this targeted approach helps maintain hard real-time guarantees on Linux systems.
 
