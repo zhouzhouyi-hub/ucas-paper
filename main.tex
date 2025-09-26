@@ -21,6 +21,7 @@
 \usepackage{listings}
 \usepackage[T1]{fontenc}
 \usepackage{tikz}
+\usepackage{float} 
 \usetikzlibrary{arrows.meta, shapes, positioning, calc}
 \lstset{
   basicstyle=\ttfamily\small,
@@ -252,7 +253,7 @@ The design, illustrated in Figure~\ref{fig:isolator_flow}, is built around three
 
 In summary, the design replaces the traditional preemptive, interrupt-driven OS model on isolated cores with a self-managed, cooperative paradigm. The real-time application retains full control over when and how maintenance occurs, resulting in significantly improved timing predictability and performance for latency-sensitive workloads.
 
-\begin{figure}[htbp]
+\begin{figure}[tb]
     \centering
     \includegraphics[width=0.9\linewidth]{Isolator.jpg}
     \caption{Core isolation enabling flow and mechanisms.}
@@ -281,7 +282,7 @@ Asynchronous IPIs, which are normally used for inter-core notifications, are rep
 shared-memory-based message posting mechanism. This enables controlled core-to-core communication without
 the unpredictability of standard IPIs. Specific handling includes:
 \begin{itemize}
-    \item \textbf{RCU (Read-Copy Update):} \item \textbf{RCU (Read-Copy Update):} Upon entering isolation, the RCU subsystem is notified that the core is isolated and must be excluded from grace-period calculations. RCU already provides this behavior for \texttt{nohz\_full} CPUs while they are running userspace code. Our extension also covers cases where the real-time workload executes in kernel context, in such situations, excluding the isolated core from RCU observation must be handled carefully, since any kernel code that is not under RCU's watch cannot safely traverse RCU-protected data structures. Furthermore, it is worth noting that automatic userspace exemption of \texttt{nohz\_full} CPUs was only introduced in more recent kernels~\cite{rcu-lpc2024}, whereas our approach is designed to also support older kernels that lack this functionality.
+    \item \textbf{RCU (Read-Copy Update):}  Upon entering isolation, the RCU subsystem is notified that the core is isolated and must be excluded from grace-period calculations. RCU already provides this behavior for CPUs running userspace code \cite{weisbecker2012context}. Our extension also covers cases where the real-time workload executes in kernel context, in such situations, excluding the isolated core from RCU observation must be handled carefully, since any kernel code that is not under RCU's watch cannot safely traverse RCU-protected data structures. 
 
     \item \textbf{TLB Shootdowns:} IPIs requesting Translation Lookaside Buffer flushes are suppressed and queued in shared memory.
       The isolated core processes these flush requests the next time it invokes \texttt{isolator\_tick}.
@@ -326,10 +327,16 @@ Defer time-based maintenance (e.g., scheduling enforcement) to application-contr
 To coordinate the behavior of different kernel components, we define the following per-CPU data
 structure:
 
-\begin{lstlisting}[language=C, caption={Per-CPU isolator counter definition}]
-DEFINE_PER_CPU(atomic_t,
-    isolator_counters[CONFIG_NR_CPUS]);
-\end{lstlisting}
+\begin{figure}[H]
+    \centering
+    \begin{lstlisting}[language=C, caption={Per-CPU isolator counter definition}]
+    DEFINE_PER_CPU(atomic_t, isolator_counters[CONFIG_NR_CPUS]);
+    \end{lstlisting}
+\end{figure}
+%\begin{lstlisting}[language=C, caption={Per-CPU isolator counter definition}]
+%DEFINE_PER_CPU(atomic_t,
+%    isolator_counters[CONFIG_NR_CPUS]);
+%\end{lstlisting}
 Each entry in this array acts as a flag indicating whether the corresponding CPU is currently under
 isolation. This flag is incremented by user-space applications via a custom system call or API
 (isolator\_start) and is read by kernel components to selectively disable or defer their operations.
