@@ -289,11 +289,8 @@ the unpredictability of standard IPIs. Specific handling includes:
     \item \textbf{CPU Frequency Scaling:} IPIs induced by CPU frequency changes are disabled to avoid unwanted interruptions.
 \end{itemize}
 
-\paragraph{Timekeeping}  
-Even after stopping periodic timers, the isolated core maintains a consistent notion of system time through \texttt{isolator\_get\_monotonic\_time}, which provides a linearized timestamp in microseconds. The \texttt{isolator\_poll\_until} function allows predictable wake-ups for polling operations without relying on standard kernel timers.
-
 \paragraph{Periodic Maintenance}  
-Deferred timer tasks and queued IPI processing are executed only when the isolated core voluntarily calls \texttt{isolator\_tick}. This ensures deterministic behavior while still allowing the core to perform necessary maintenance tasks at controlled intervals.
+Deferred timer tasks and queued IPI processing are executed only when the isolated core voluntarily calls \texttt{isolator\_tick}. This ensures deterministic behavior while still allowing the core to perform necessary maintenance tasks at controlled intervals. \texttt{isolator\_tick} can be invoked from both user space and kernel space. Currently, in order to support invocation from user space, the entry from user space into kernel space is implemented via the proc filesystem.
 
 \paragraph{Restoration Mechanism}  
 When isolation ends, previously canceled Linux timers and real-time bandwidth timers are restarted, and normal IPI handling is restored. The core then returns to standard operation, with all periodic activities and inter-core notifications resumed.
