@@ -21,7 +21,8 @@
 \usepackage{listings}
 \usepackage[T1]{fontenc}
 \usepackage{tikz}
-\usepackage{float} 
+\usepackage{float}
+\usepackage{amsmath}
 \usetikzlibrary{arrows.meta, shapes, positioning, calc}
 \lstset{
   basicstyle=\ttfamily\small,
@@ -346,10 +347,6 @@ isolated cores during RCU grace periods. This approach maintains forward progres
 mechanism while eliminating dependencies on cores that are no longer expected to participate in
 normal kernel activity.
 
-Such treatment is especially crucial in real-time and low-latency systems where isolated CPUs are
-fully dedicated to user-level workloads and should not incur involuntary kernel participation.
-We add following following condition to RCU kernel functions:
-
 
 \begin{figure}[t]
 \centering
@@ -393,6 +390,8 @@ periods, preventing \texttt{synchronize\_rcu} from returning, which in turn caus
 invoking \texttt{synchronize\_rcu} to remain blocked. By disallowing \texttt{rcu\_preempt} on 
 isolated CPUs, we avoid this pathological scenario and preserve the expected non-blocking behavior 
 of RCU for the rest of the system.  
+
+
 
 \subsection{Time Scheduler Deferral}
 \paragraph{Tick Subsystem Modifications.}
