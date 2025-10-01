@@ -616,7 +616,7 @@ The experimental setup consists of the following equipment:
   \item Jumper Wires  
 \end{itemize}
 
-The signal generator drives a GPIO input connected simultaneously to both the Phytium Pi development board and the oscilloscope. The development board, upon detecting the input trigger, produces an output GPIO signal, which is also monitored by the oscilloscope Figure~\ref{fig:oscilloscope}.  
+The signal generator is connected simultaneously to the GPIO of the Phytium Pi development board and the oscilloscope. The development board, upon detecting the input trigger, produces an output GPIO signal, which is also monitored by the oscilloscope Figure~\ref{fig:oscilloscope}.  
 
 To evaluate determinism, the oscilloscope’s persistence mode is enabled to visualize potential variations in the output signal. The input signal frequency is set to 200~kHz with a voltage range of 0--3.3~V. In order to better capture timing details, the oscilloscope time base is reduced from 2~µs/div to 100~ns/div, thereby improving horizontal resolution. The persistence overlay allows us to observe long-term stability and quantify jitter.
 
