@@ -646,7 +646,20 @@ Here, the left edge of the persistence trace corresponds to the shortest respons
 \end{figure}
 
 \subsection{Experimental Results}
-In a 24-hour continuous test, the system with isolator technology achieved, as show in Figure~\ref{fig:islintgpio}:
+In a 24-hour continuous test, the system with isolator technology achieved, as show in Figure~\ref{fig:islintgpio} \footnote {
+As shown in Figure~\ref{fig:islintgpio}, the oscilloscope persistence waveform clearly
+illustrates the shortest (left) and longest (right) GPIO response times
+through the isolator. The green trace consistently departs from the
+x-axis at approximately 100~ns, corresponding to the oscilloscope
+trigger on channel~1. The red trace departs from the x-axis at times
+ranging between about 3.9 and just a bit more than 4.6 divisions, consistent with our
+reported 390--470~ns range. Measuring from the point at which the trace
+leaves the x-axis provides a fair and accurate definition of system
+response time: the software cannot begin to respond before channel~1
+has left the axis, and channel~2 cannot leave until after the software
+has responded. Thus, this measurement captures the full response time,
+including GPIO delays, and avoids underestimating latency.
+}:
 \begin{itemize}
     \item Period: 2 us
     \item Maximum response latency: 470 ns
