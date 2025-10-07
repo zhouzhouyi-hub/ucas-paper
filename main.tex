@@ -717,36 +717,38 @@ as shown in Figure~\ref{fig:islcountergpio} and Figure~\ref{fig:linuxcountergpio
 
 \begin{table}[t]
 \centering
+\caption{Latency measurements over a 24-hour period (corresponding to Figures~\ref{fig:islintgpio} and~\ref{fig:linuxintgpio}).}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \hline
-\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} & \textbf{Duration} \\
+\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} \\
 \hline
-With Isolator & 2000~ns & 390~ns & 470~ns & 24~h \\
-PREEMPT-RT Linux & 200000~ns & 4100~ns & 72000~ns & 24~h \\
+With Isolator     & 2000~ns   & 390~ns   & 470~ns  \\
+PREEMPT-RT Linux  & 200000~ns & 4100~ns  & 72000~ns \\
 \hline
 \end{tabular}
 }
-\caption{Latency comparison under different configurations.}
 \label{tab:latency-comparison}
 \end{table}
 
 
+
 \begin{table}[t]
 \centering
+\caption{Latency comparison under different configurations (timestamp counter based), measured over a 24-hour period. Corresponding results are shown in Figures~\ref{fig:islcountergpio} and~\ref{fig:linuxcountergpio}.}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \hline
-\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} & \textbf{Duration} \\
+\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} \\
 \hline
-With Isolator & 2000~ns & 0~ns & 40~ns & 24~h \\
-PREEMPT-RT Linux & 200000~ns & 0~ns & 8000~ns & 24~h \\
+With Isolator     & 2000~ns   & 0~ns   & 40~ns \\
+PREEMPT-RT Linux  & 200000~ns & 0~ns   & 8000~ns \\
 \hline
 \end{tabular}
 }
-\caption{Latency comparison under different configurations (Timestamp counter based).}
 \label{tab:latency-comparison1}
 \end{table}
+
 
 
 \subsection{Inter-core Communication Delay Measurement}
@@ -762,19 +764,20 @@ captured by the oscilloscope, directly reflects the inter-core communication del
 
 \begin{table}[t]
 \centering
+\caption{Latency comparison under different configurations (inter-core communication delay), measured over a 24-hour period. Corresponding results are shown in Figures~\ref{fig:islcrossgpio} and~\ref{fig:linuxcrossgpio}.}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{lcccc}
+\begin{tabular}{lccc}
 \hline
-\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} & \textbf{Duration} \\
+\textbf{Configuration} & \textbf{Period} & \textbf{Min Lat} & \textbf{Max Lat} \\
 \hline
-With Isolator & 2000~ns & 120~ns & 160~ns & 24~h \\
-PREEMPT-RT Linux & 200000~ns & 1040~ns & 2200~ns & 24~h \\
+With Isolator     & 2000~ns   & 120~ns   & 160~ns \\
+PREEMPT-RT Linux  & 200000~ns & 1040~ns  & 2200~ns \\
 \hline
 \end{tabular}
 }
-\caption{Latency comparison under different configurations (Inter-core communication delay).}
 \label{tab:latency-comparison3}
 \end{table}
+
 
 Results show that with the Isolator enabled, inter-core communication latency consistently remained
 in the sub-microsecond range, with a minimum of about 120~ns, a maximum below 160~ns, and jitter
@@ -814,7 +817,7 @@ a clear and intuitive representation of latency bounds under both the Isolator a
 configurations.
 
 
-The experiments in this section demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (80 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency (up to 67.9 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
+The experiments in this section demonstrate that using the isolator significantly improves GPIO signal determinism on the Phytium Pi development board. When triggered by an external signal generator, the isolator-enabled system achieves sub-microsecond maximum latency and minimal jitter (80 ns), as visualized through the oscilloscope persistence mode. In contrast, a standard PREEMPT-RT Linux system exhibits much higher latency jitter (up to 67.9 µs). The counter-based GPIO toggling test over 24 hours further confirms that CPU isolation with the isolator ensures stable, predictable timing, whereas non-isolated real-time Linux shows large and inconsistent latencies. Overall, the isolator provides robust deterministic execution for time-critical GPIO operations.
 
 \section{Summary}
 This paper introduced a kernel-level isolation framework that enables deterministic sub-microsecond execution on Linux by eliminating involuntary interruptions on dedicated cores. The proposed design suppresses periodic tick timers, defers real-time bandwidth enforcement, and replaces asynchronous inter-processor interrupts with shared-memory coordination. Through the Isolator API, applications retain explicit control over when and how deferred maintenance tasks are executed, preserving both determinism and system correctness.
