@@ -661,7 +661,7 @@ has responded. Thus, this measurement captures the full response time,
 including GPIO delays, and avoids underestimating latency.
 }:
 \begin{itemize}
-    \item Period: 2 us
+    \item Period: 2 µs
     \item Maximum response latency: 470 ns
     \item Minimum response latency: 390 ns
     \item Jitter: 80 ns
@@ -673,15 +673,15 @@ By contrast, in a 24-hour continuous test,  PREEMPT-RT Linux system can only ach
 As shown in Figure~\ref{fig:linuxintgpio}, the oscilloscope persistence waveform clearly
 illustrates the shortest (left) and longest (right) GPIO response times
 through the isolator. The green trace consistently departs from the
-x-axis at approximately 10~us, corresponding to the oscilloscope
+x-axis at approximately 10~µs, corresponding to the oscilloscope
 trigger on channel~1. The red trace departs from the x-axis at times
 ranging between about 1 + 0.41 and just a bit more than 1 + 7.2 divisions, consistent with our
 reported 4100--72000~ns range}.
 \begin{itemize}
-    \item Period: 200 us
-    \item Maximum response latency: 72  us
-    \item Minimum response latency: 4.1 us
-    \item Jitter: 67.9 us
+    \item Period: 200 µs
+    \item Maximum response latency: 72  µs
+    \item Minimum response latency: 4.1 µs
+    \item Jitter: 67.9 µs
 \end{itemize}
 
 \begin{figure}[h]
