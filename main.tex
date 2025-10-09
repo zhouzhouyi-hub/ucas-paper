@@ -693,8 +693,15 @@ reported 4100--72000~ns range}.
 
 The results are summarized in Table~\ref{tab:latency-comparison}.
 
-\subsection {Timestamp counter based GPIO toggling test} 
-In addition to the external signal generator driven experiment, we implemented a timestamp counter-based GPIO toggling program. In this setup, the output signal is generated periodically by continuously reading the CPU timestamp counter (\texttt{CNTVCT\_EL0}) and flipping the GPIO at predefined intervals, eliminating the need for an external signal source.
+\subsection {Timestamp counter based GPIO toggling test}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\columnwidth]{evaluation-ts.jpg}
+    \caption{System architecture (Timestamp counter based).}
+    \label{fig:oscilloscopets}
+\end{figure}
+In addition to the external signal generator driven experiment, we implemented a timestamp counter-based GPIO toggling program. In this setup, the output signal is generated periodically by continuously reading the CPU timestamp counter (\texttt{CNTVCT\_EL0}) and flipping the GPIO at predefined intervals, eliminating the need for an external signal source as shown in Figure~\ref{fig:oscilloscopets}.
 
 The long-term experiment was conducted for 24 hours under both CPU-isolated and non-isolated environments. The results are summarized in Table~\ref{tab:latency-comparison1}, also showing that the isolator achieves sub-microsecond determinism, while PREEMPT-RT Linux suffers from significantly larger latency
 as shown in Figure~\ref{fig:islcountergpio} and Figure~\ref{fig:linuxcountergpio} .
@@ -757,7 +764,8 @@ To further evaluate the determinism of the isolation framework in multicore envi
 conducted an inter-core communication delay experiment using GPIO and inter-processor interrupts (IPIs).
 In this setup, Core~A raises \texttt{GPIO1} and simultaneously sends an IPI to Core~B. Upon receiving
 the interrupt, Core~B responds by raising \texttt{GPIO2}.
-The other ends of GPIO1 and GPIO2 are connected to Channel 1 and Channel 2 of the oscilloscope, respectively.
+The other ends of GPIO1 and GPIO2 are connected to Channel 1 and Channel 2 of the oscilloscope respectively
+(the same as Figure~\ref{fig:oscilloscope}).
 The latency between the two GPIO transitions,
 captured by the oscilloscope, directly reflects the inter-core communication delay.
 
@@ -822,7 +830,7 @@ The experiments in this section demonstrate that using the isolator significantl
 \section{Summary}
 This paper introduced a kernel-level isolation framework that enables deterministic sub-microsecond execution on Linux by eliminating involuntary interruptions on dedicated cores. The proposed design suppresses periodic tick timers, defers real-time bandwidth enforcement, and replaces asynchronous inter-processor interrupts with shared-memory coordination. Through the Isolator API, applications retain explicit control over when and how deferred maintenance tasks are executed, preserving both determinism and system correctness.
 
-Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under isolator-enabled operation, GPIO response latencies consistently remain below 470ns with jitter as low as 80ns, compared to up to 72~µs latency observed on PREEMPT-RT Linux. A timestamp-counter based GPIO toggling experiment further validated that the isolator achieves stable, sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency fluctuations in the hundreds of microseconds.
+Evaluation on the Phytium Pi platform demonstrates the effectiveness of this approach. Under isolator-enabled operation, GPIO response latencies consistently remain below 470ns with jitter as low as 80ns, compared to up to 72~µs latency with jitter 67.9 µs observed on PREEMPT-RT Linux. A timestamp-counter based GPIO toggling experiment further validated that the isolator achieves stable, sub-microsecond determinism over 24 hours, while non-isolated real-time Linux exhibited latency fluctuations in the hundreds of microseconds.
 
 Together, these results highlight that interrupt isolation and cooperative tick management provide a lightweight yet powerful strategy for achieving predictable performance on general-purpose operating systems. The framework enables strong temporal isolation and low-jitter execution, making it well suited for latency-critical scenarios such as packet processing, edge computing, and real-time control in embedded systems. Notably, the principles outlined in this work are being actively explored in Ucas Wanghuo Linux \cite{zhou2025linux}, where the isolator-inspired mechanisms are integrated into the system architecture to reinforce deterministic execution guarantees. This demonstrates the broader applicability of our design in advancing real-time performance within production-grade operating systems.
 
