@@ -669,7 +669,7 @@ including GPIO delays, and avoids underestimating latency.
 
 
 By contrast, in a 24-hour continuous test,  PREEMPT-RT Linux system can only achieve maximum response latency:
-72us  \footnote {
+72 µs  \footnote {
 As shown in Figure~\ref{fig:linuxintgpio}, the oscilloscope persistence waveform clearly
 illustrates the shortest (left) and longest (right) GPIO response times
 through the isolator. The green trace consistently departs from the
@@ -795,14 +795,14 @@ latency exhibited significant variability, with maximum values exceeding 2~µs
 eliminates involuntary interruptions and ensures low-jitter, deterministic execution in cross-core
 communication scenarios, as summarized in Table~\ref{tab:latency-comparison3}.
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.8\linewidth]{figures/islcrosscoreintgpio.png}
   \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (Isolator cross-core communication).}
   \label{fig:islcrossgpio}
 \end{figure}
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.8\linewidth]{figures/linuxcrosscoreintgpio.png}
   \caption{Oscilloscope persistence waveform showing shortest (left) and longest (right) GPIO response times (PREEMPT-RT Linux cross-core communication).}
